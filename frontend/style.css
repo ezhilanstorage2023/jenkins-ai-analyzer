@@ -1,0 +1,217 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Inter, Arial, sans-serif;
+    background: #f5f7fb;
+    color: #172033;
+}
+
+.container {
+    width: 90%;
+    max-width: 1050px;
+    margin: 50px auto;
+}
+
+/* Header */
+
+.header {
+    margin-bottom: 30px;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 38px;
+    font-weight: 700;
+}
+
+.header p {
+    margin-top: 10px;
+    color: #697386;
+    font-size: 17px;
+}
+
+/* Upload Card */
+
+.upload-card {
+    background: white;
+    border: 1px solid #e5e9f0;
+    border-radius: 16px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.05);
+}
+
+.upload-area {
+    display: block;
+    width: 100%;
+    min-height: 180px;
+    border: 2px dashed #cbd3df;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: 0.2s;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    padding: 30px;
+}
+
+.upload-area:hover {
+    border-color: #4f46e5;
+    background: #fafaff;
+}
+
+.upload-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+}
+
+.upload-title {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.upload-subtitle {
+    color: #7b8494;
+    margin-top: 8px;
+}
+
+/* File input */
+
+.selected-file {
+    margin-top: 15px;
+    font-weight: 600;
+    color: #4f46e5;
+}
+
+#logFile {
+    display: none;
+}
+
+/* Button */
+
+button {
+    margin-top: 25px;
+    padding: 13px 28px;
+    border: none;
+    border-radius: 9px;
+    background: #4f46e5;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover {
+    background: #4338ca;
+}
+
+button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+/* Status */
+
+#status {
+    margin-top: 18px;
+    color: #697386;
+}
+
+/* Results */
+
+.result {
+    margin-top: 35px;
+}
+
+.result-header {
+    margin-bottom: 20px;
+}
+
+.result-header h2 {
+    margin: 0;
+    font-size: 27px;
+}
+
+/* Result cards */
+
+.section {
+    background: white;
+    border: 1px solid #e5e9f0;
+    border-radius: 14px;
+    padding: 22px 25px;
+    margin-top: 16px;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.04);
+}
+
+.section h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #4f46e5;
+}
+
+.section p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* Evidence */
+
+#evidence {
+    margin: 0;
+    padding-left: 20px;
+}
+
+#evidence li {
+    margin-bottom: 10px;
+    line-height: 1.5;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    background: #f8fafc;
+    padding: 10px;
+    border-radius: 6px;
+    word-break: break-word;
+}
+
+/* Confidence */
+
+.confidence {
+    display: inline-block;
+    padding: 7px 14px;
+    border-radius: 20px;
+    background: #dcfce7;
+    color: #166534;
+    font-weight: 700;
+}
+
+/* Hidden */
+
+.hidden {
+    display: none;
+}
+
+/* Responsive */
+
+@media (max-width: 700px) {
+
+    .container {
+        width: 94%;
+        margin: 25px auto;
+    }
+
+    .header h1 {
+        font-size: 30px;
+    }
+
+    .upload-card {
+        padding: 20px;
+    }
+
+}

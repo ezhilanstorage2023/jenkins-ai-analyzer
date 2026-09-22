@@ -1,0 +1,22 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+    container_name: jenkins-ai-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
+  frontend:
+    image: python:3.12-slim
+    container_name: jenkins-ai-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: python -m http.server 5500 --bind 0.0.0.0
+    ports:
+      - "5500:5500"
+    restart: unless-stopped

@@ -1,0 +1,8 @@
+﻿fastapi==0.141.1
+groq==1.7.0
+langgraph==1.2.11
+pydantic==2.13.5
+python-dotenv==1.2.3
+python-multipart==0.0.32
+uvicorn==0.53.0
+pytest==9.1.1

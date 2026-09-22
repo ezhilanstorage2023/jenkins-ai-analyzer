@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Jenkins AI Analyzer</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- Header -->
+
+    <div class="header">
+
+        <h1>🔧 Jenkins AI Analyzer</h1>
+
+        <p>
+            AI-powered Jenkins build failure analysis
+        </p>
+
+    </div>
+
+
+    <!-- Upload -->
+
+    <div class="upload-card">
+
+        <label
+            for="logFile"
+            class="upload-area"
+        >
+
+            <div class="upload-icon">
+                📄
+            </div>
+
+            <div class="upload-title">
+                Upload Jenkins Build Log
+            </div>
+
+            <div class="upload-subtitle">
+                Click here to select a .txt or .log file
+            </div>
+
+        </label>
+
+
+        <input
+            type="file"
+            id="logFile"
+            accept=".txt,.log"
+        >
+
+
+        <div id="selectedFile"></div>
+
+
+        <button id="analyzeButton">
+            Analyze Build
+        </button>
+
+
+        <p id="status"></p>
+
+    </div>
+
+
+    <!-- Results -->
+
+    <div
+        id="result"
+        class="result hidden"
+    >
+
+        <div class="result-header">
+
+            <h2>
+                Analysis Result
+            </h2>
+
+        </div>
+
+
+        <!-- Failure -->
+
+        <div class="section">
+
+            <h3>
+                🔴 Failure Summary
+            </h3>
+
+            <p id="failureSummary"></p>
+
+        </div>
+
+
+        <!-- Root Cause -->
+
+        <div class="section">
+
+            <h3>
+                🎯 Root Cause
+            </h3>
+
+            <p id="rootCause"></p>
+
+        </div>
+
+
+        <!-- Component -->
+
+        <div class="section">
+
+            <h3>
+                ⚙️ Affected Component
+            </h3>
+
+            <p id="affectedComponent"></p>
+
+        </div>
+
+
+        <!-- Evidence -->
+
+        <div class="section">
+
+            <h3>
+                🔎 Evidence
+            </h3>
+
+            <ul id="evidence"></ul>
+
+        </div>
+
+
+        <!-- Fix -->
+
+        <div class="section">
+
+            <h3>
+                🛠️ Recommended Fix
+            </h3>
+
+            <p id="recommendedFix"></p>
+
+        </div>
+
+
+        <!-- Confidence -->
+
+        <div class="section">
+
+            <h3>
+                📊 Confidence
+            </h3>
+
+            <p>
+                <span
+                    id="confidence"
+                    class="confidence"
+                ></span>
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script src="app.js"></script>
+
+</body>
+
+</html>
