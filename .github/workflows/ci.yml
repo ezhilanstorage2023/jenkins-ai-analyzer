@@ -26,7 +26,7 @@ jobs:
 
       - name: Run tests
         working-directory: backend
-        run: pytest
+        run: pytest tests
 
       - name: Build backend Docker image
         run: docker build -t jenkins-ai-backend ./backend
