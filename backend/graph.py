@@ -33,8 +33,58 @@ def parser_node(state: State):
     parsed_log = extract_error_context(
         log,
         context_before=3,
-        context_after=5
+        context_after=5,
+        max_blocks=20
     )
+
+    # Keep the LLM input within a safe size.
+    # Instead of blindly taking the first 10,000 characters,
+    # prioritize the latest error contexts.
+    max_characters = 10000
+
+    if len(parsed_log) > max_characters:
+
+        blocks = parsed_log.split(
+            "\n\n--- ERROR CONTEXT ---\n\n"
+        )
+
+        selected_blocks = []
+        current_length = 0
+
+        # Start from the latest error block
+        for block in reversed(blocks):
+
+            block_length = len(block)
+
+            separator_length = (
+                len("\n\n--- ERROR CONTEXT ---\n\n")
+                if selected_blocks
+                else 0
+            )
+
+            if (
+                current_length
+                + separator_length
+                + block_length
+                > max_characters
+            ):
+                break
+
+            selected_blocks.append(block)
+
+            current_length += (
+                separator_length
+                + block_length
+            )
+
+        # Restore chronological order
+        selected_blocks.reverse()
+
+        parsed_log = (
+            "\n\n--- ERROR CONTEXT ---\n\n"
+            .join(selected_blocks)
+        )
+
     print("\n===== PARSER OUTPUT =====")
     print(parsed_log)
     print("===== END PARSER OUTPUT =====\n")
@@ -59,11 +109,12 @@ def parser_node(state: State):
         "extracted_characters": len(parsed_log)
     }
 
-    # Keep request within the model token budget
-    parsed_log = parsed_log[:10000]
-
     print("Parser metadata:", parser_metadata)
-    print("Parser extracted:", len(parsed_log), "characters")
+    print(
+        "Parser extracted:",
+        len(parsed_log),
+        "characters"
+    )
 
     return {
         "parsed_log": parsed_log,
