@@ -75,6 +75,9 @@ function displayResult(data) {
     document.getElementById("failureSummary")
         .textContent = data.failure_summary;
 
+    document.getElementById("errorCategory")
+        .textContent = data.error_category;
+
     document.getElementById("rootCause")
         .textContent = data.root_cause;
 
