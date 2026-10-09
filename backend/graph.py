@@ -269,6 +269,7 @@ Return ONLY valid JSON in this exact structure:
 
 {{
     "root_cause": "the most defensible root cause",
+    "error_category": "Infrastructure Error, Developer-Side Error, or DevOps-Side Error",
     "evidence": [
         "evidence from the detected errors"
     ],
@@ -279,6 +280,16 @@ Return ONLY valid JSON in this exact structure:
 
 Rules:
 - Use only information supported by the evidence.
+- Classify the root cause as exactly one of these categories:
+    - Infrastructure Error: an external Jenkins agent, server, network,
+        storage, cloud resource, or service availability/resource problem.
+    - Developer-Side Error: a defect in application source code, such as
+        compilation errors or failing code-level tests.
+    - DevOps-Side Error: a Jenkinsfile, pipeline, build/deployment automation,
+        credentials, permissions, toolchain, or environment configuration problem.
+- Set error_category to exactly one of the three category names in the JSON structure.
+- Choose the category best supported by the root cause and evidence; do not
+    classify based only on the fact that the failure occurred in Jenkins.
 - Do not invent missing information.
 - If the exact root cause cannot be determined, explicitly say so.
 - Confidence must reflect the strength of the available evidence.
@@ -496,6 +507,8 @@ def build_analysis_response(result, filename):
             "root_cause",
             "Unknown"
         ),
+
+        "error_category": root_cause["error_category"],
 
         "affected_component": root_cause.get(
             "affected_component",
