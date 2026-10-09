@@ -1,3 +1,7 @@
+
+import re
+
+
 def extract_error_context(
     text,
     context_before=3,
@@ -5,89 +9,130 @@ def extract_error_context(
     max_blocks=20
 ):
     """
-    Extract useful error/failure contexts from a Jenkins log.
+    Extract relevant Jenkins failure contexts.
 
-    The function scans the complete log, finds important failure-related
-    lines, adds surrounding context, merges overlapping sections, and
-    returns the most relevant sections.
-
-    Later error contexts are prioritized because Jenkins logs often contain
-    intermediate warnings/errors followed by the actual final failure.
+    Prioritizes specific underlying errors over generic build-failure
+    messages while preserving line numbers and surrounding context.
     """
 
     lines = text.splitlines()
 
-    keywords = [
+    # Specific errors that may reveal the original cause.
+    root_cause_patterns = [
+        r"\bcannot stat\b",
+        r"\bno such file or directory\b",
+        r"\bpermission denied\b",
+        r"\bcommand not found\b",
+        r"\bno space left on device\b",
+        r"\bundefined reference\b",
+        r"\bcannot find symbol\b",
+        r"\bfatal error\s*:",
+        r"\btraceback \(most recent call last\)",
+        r"\bconnection refused\b",
+        r"\bcould not resolve host\b",
+        r"\bfailed to fetch\b",
+        r"\bcompilation failed\b",
+        r"\bsegmentation fault\b",
+    ]
+
+    # Generic indicators that a failure occurred.
+    failure_keywords = [
         "ERROR",
         "EXCEPTION",
         "FAILURE",
         "FAILED",
         "FATAL",
-        "CAUSED BY"
+        "CAUSED BY",
     ]
 
-    ranges = []
+    # Collect failure contexts with priority scores.
+    candidates = []
 
     for index, line in enumerate(lines):
-
         upper_line = line.upper()
 
-        if any(keyword in upper_line for keyword in keywords):
+        specific_match = any(
+            re.search(pattern, line, re.IGNORECASE)
+            for pattern in root_cause_patterns
+        )
 
-            start = max(
-                0,
-                index - context_before
-            )
+        generic_match = any(
+            keyword in upper_line
+            for keyword in failure_keywords
+        )
 
-            end = min(
-                len(lines),
-                index + context_after + 1
-            )
-
-            ranges.append((start, end))
-
-    # No failure-related lines found
-    if not ranges:
-        return ""
-
-    # Sort ranges by their location in the log
-    ranges.sort()
-
-    # Merge overlapping or adjacent ranges
-    merged_ranges = []
-
-    for start, end in ranges:
-
-        if not merged_ranges:
-            merged_ranges.append([start, end])
+        if not specific_match and not generic_match:
             continue
 
-        previous_start, previous_end = merged_ranges[-1]
+        start = max(0, index - context_before)
+        end = min(len(lines), index + context_after + 1)
 
-        if start <= previous_end:
-            merged_ranges[-1][1] = max(
-                previous_end,
-                end
+        # Specific errors receive higher priority.
+        priority = 2 if specific_match else 1
+
+        candidates.append({
+            "start": start,
+            "end": end,
+            "priority": priority,
+            "line": index,
+        })
+
+    if not candidates:
+        return ""
+
+    # Merge overlapping contexts, retaining their highest priority.
+    candidates.sort(key=lambda item: item["start"])
+    merged = []
+
+    for candidate in candidates:
+        if (
+            merged
+            and candidate["start"] <= merged[-1]["end"]
+        ):
+            current = merged[-1]
+            current["end"] = max(
+                current["end"],
+                candidate["end"]
+            )
+            current["priority"] = max(
+                current["priority"],
+                candidate["priority"]
+            )
+            current["latest_line"] = max(
+                current["latest_line"],
+                candidate["line"]
             )
         else:
-            merged_ranges.append([start, end])
+            merged.append({
+                "start": candidate["start"],
+                "end": candidate["end"],
+                "priority": candidate["priority"],
+                "latest_line": candidate["line"],
+            })
 
-    # Jenkins logs commonly contain the real failure near the end.
-    # Keep the latest blocks first, while still limiting the total number.
-    selected_ranges = merged_ranges[-max_blocks:]
+    # Prefer specific errors first; use recency to break ties.
+    ranked = sorted(
+        merged,
+        key=lambda block: (
+            block["priority"],
+            block["latest_line"]
+        ),
+        reverse=True
+    )
 
-    # Restore chronological order
-    selected_ranges.sort()
+    selected = ranked[:max_blocks]
+
+    # Restore chronological order for easier log interpretation.
+    selected.sort(key=lambda block: block["start"])
 
     blocks = []
 
-    for start, end in selected_ranges:
-
-        block = "\n".join(
+    for block in selected:
+        formatted_lines = [
             f"[Line {i + 1}] {lines[i]}"
-            for i in range(start, end)
-        )
+            for i in range(block["start"], block["end"])
+        ]
 
-        blocks.append(block)
+        blocks.append("\n".join(formatted_lines))
 
     return "\n\n--- ERROR CONTEXT ---\n\n".join(blocks)
