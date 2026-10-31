@@ -32,3 +32,14 @@ def fake_llm(monkeypatch):
         return fake
 
     return make
+
+
+WEBHOOK_TOKEN = "t0k"
+JENKINS_URL = "https://ci.example.com"
+
+
+@pytest.fixture
+def webhook_env(monkeypatch):
+    monkeypatch.setenv("JENKINS_WEBHOOK_TOKEN", WEBHOOK_TOKEN)
+    monkeypatch.setenv("JENKINS_URL", JENKINS_URL)
+    get_settings.cache_clear()
