@@ -82,3 +82,18 @@ class FakeJenkins:
         import httpx
 
         return httpx.MockTransport(self._handle)
+
+
+def responses_for(log, signature, category):
+    """Canned detector/root-cause/verdict JSON grounded in `log`."""
+
+    from utils.log_processor import extract_error_context
+
+    parsed = extract_error_context(log)
+    evidence = next(line for line in parsed.splitlines() if signature in line)
+
+    return [
+        detected_json([evidence]),
+        root_cause_json(category, [evidence]),
+        verdict_json(True),
+    ]
