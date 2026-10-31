@@ -1,12 +1,16 @@
 from functools import lru_cache
+from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).parent
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Anchored to backend/, independent of the working directory.
+        env_file=BACKEND_DIR / ".env",
         extra="ignore",
     )
 
@@ -26,6 +30,42 @@ class Settings(BaseSettings):
     ]
 
     log_level: str = "INFO"
+
+    # as_posix(): forward slashes, so the URL is valid on Windows too.
+    database_url: str = f"sqlite:///{(BACKEND_DIR / 'data' / 'remediation.db').as_posix()}"
+
+    jenkins_url: str | None = None
+    # Single controller in P1; webhooks for any other id are rejected.
+    jenkins_controller_id: str = "default"
+    jenkins_username: str | None = None
+    jenkins_api_token: SecretStr | None = None
+    jenkins_webhook_token: SecretStr | None = None
+    jenkins_max_log_bytes: int = 5_000_000
+    jenkins_timeout_seconds: float = 30.0
+
+    # Test-period recipient for proposed DevOps notifications.
+    owner_email_override: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OWNER_EMAIL_OVERRIDE", "EMAIL_ID"),
+    )
+
+    # fnmatch patterns of jobs eligible for an infra re-run.
+    rerun_job_allowlist: list[str] = []
+
+    # Job paths whose failed builds can be browsed and classified from the UI.
+    jenkins_jobs: list[str] = []
+
+    worker_poll_seconds: float = 5.0
+    worker_max_attempts: int = 3
+    worker_lease_seconds: int = 600
+    worker_backoff_seconds: int = 60
+
+    @property
+    def jenkins_base_url(self) -> str | None:
+        if not self.jenkins_url:
+            return None
+
+        return self.jenkins_url.rstrip("/") + "/"
 
 
 @lru_cache

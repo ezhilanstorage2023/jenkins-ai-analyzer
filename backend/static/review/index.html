@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Failure Review</title>
+    <link rel="stylesheet" href="review.css">
+</head>
+<body>
+
+<header>
+    <h1>Jenkins Failure Review</h1>
+    <p class="subtitle">
+        Shadow mode: classifications and proposed actions are recorded only.
+        Nothing is executed against Jenkins, Gerrit or email.
+    </p>
+    <div id="accuracy" class="accuracy"></div>
+</header>
+
+<main>
+    <section class="list">
+        <div class="toolbar">
+            <label for="buildsCount">Live failed builds · last</label>
+            <input id="buildsCount" type="number" min="1" max="100" value="20">
+            <button id="loadBuilds" type="button">Refresh from Jenkins</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Job</th>
+                    <th>Build</th>
+                    <th>Result</th>
+                    <th>Failed (UTC)</th>
+                    <th>State</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="failedBuilds"></tbody>
+        </table>
+        <p id="buildsStatus" class="muted"></p>
+    </section>
+
+    <section class="list">
+        <div class="toolbar">
+            <label for="filter">Show</label>
+            <select id="filter">
+                <option value="triage">Needs triage (unlabeled)</option>
+                <option value="all">All</option>
+                <option value="infra">infra</option>
+                <option value="devops">devops</option>
+                <option value="compilation">compilation</option>
+                <option value="needs_triage">needs_triage</option>
+            </select>
+            <button id="refresh" type="button">Refresh</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Job</th>
+                    <th>Build</th>
+                    <th>Received (UTC)</th>
+                    <th>Final</th>
+                    <th>LLM</th>
+                    <th>Validated</th>
+                    <th>Reasons</th>
+                    <th>Label</th>
+                </tr>
+            </thead>
+            <tbody id="events"></tbody>
+        </table>
+        <p id="listStatus" class="muted"></p>
+    </section>
+
+    <section id="detail" class="detail hidden">
+        <h2 id="detailTitle"></h2>
+        <div id="detailBody"></div>
+
+        <h3>Proposed (shadow — not executed)</h3>
+        <div id="detailAction"></div>
+
+        <h3>Label this classification</h3>
+        <form id="labelForm">
+            <label><input type="radio" name="verdict" value="correct" checked> Correct</label>
+            <label><input type="radio" name="verdict" value="incorrect"> Incorrect</label>
+            <select id="correctCategory" disabled>
+                <option value="">Correct category…</option>
+                <option value="infra">infra</option>
+                <option value="devops">devops</option>
+                <option value="compilation">compilation</option>
+                <option value="needs_triage">needs_triage</option>
+            </select>
+            <textarea id="note" maxlength="2000" placeholder="Note (optional)"></textarea>
+            <button type="submit">Save label</button>
+            <span id="labelStatus" class="muted"></span>
+        </form>
+    </section>
+</main>
+
+<script src="review.js"></script>
+</body>
+</html>

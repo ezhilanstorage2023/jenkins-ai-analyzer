@@ -1,4 +1,4 @@
-from utils.log_processor import extract_error_context
+from utils.log_processor import cap_line_length, extract_error_context
 from utils.redaction import redact
 from models import (
     DetectedErrors,
@@ -517,7 +517,7 @@ def analyze_log(log_content: str) -> dict:
 
     try:
         return app.invoke({
-            "log_content": redact(log_content),
+            "log_content": redact(cap_line_length(log_content)),
             "parsed_log": "",
             "parser_metadata": {},
             "detected_errors": {},

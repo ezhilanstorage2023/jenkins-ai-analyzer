@@ -34,3 +34,10 @@ build/
 
 # LibreOffice lock files
 .~lock.*#
+
+# Local remediation database
+backend/data/
+
+# Real build logs fetched for classification checks
+failed-logs/
+jenkins_json_response.txt

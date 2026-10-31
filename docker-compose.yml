@@ -8,7 +8,27 @@ services:
       - "8000:8000"
     env_file:
       - ./backend/.env
+    environment:
+      DATABASE_URL: sqlite:////app/data/remediation.db
+    volumes:
+      - ./backend/data:/app/data
     restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+    container_name: jenkins-ai-worker
+    command: python -m worker
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: sqlite:////app/data/remediation.db
+    volumes:
+      - ./backend/data:/app/data
+    depends_on:
+      - backend
+    # Exits 0 when Jenkins is not configured; only restart on crashes.
+    restart: on-failure
 
   frontend:
     image: python:3.12-slim
