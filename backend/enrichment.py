@@ -4,9 +4,11 @@ import re
 from dataclasses import dataclass, replace
 
 from clients.jenkins import BuildInfo, ConsoleLog, JenkinsClient, Stage
+from utils.log_processor import cap_line_length
 from utils.redaction import redact, redact_mapping
 
-_STAGE_MARKER = re.compile(r"^\[Pipeline\] \{ \((.+)\)$", re.MULTILINE)
+# \r? : consoles from Windows agents end lines with CRLF.
+_STAGE_MARKER = re.compile(r"^\[Pipeline\] \{ \((.+?)\)\r?$", re.MULTILINE)
 _ARTIFACTORY_LINK = re.compile(
     r"https?://[^\s\"'<>]*artifactory[^\s\"'<>]*",
     re.IGNORECASE,
@@ -74,7 +76,9 @@ def enrich(client: JenkinsClient, build_url: str) -> EnrichmentData:
     console = client.get_console(build_url)
     stages = client.get_stages(build_url)
 
-    redacted_console = redact(console.text)
+    # Cap before redaction (bounds regex cost) and after (redaction can
+    # lengthen a line slightly).
+    redacted_console = cap_line_length(redact(cap_line_length(console.text)))
 
     return EnrichmentData(
         build=replace(build, parameters=redact_mapping(build.parameters)),

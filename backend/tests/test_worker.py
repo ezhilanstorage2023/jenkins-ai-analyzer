@@ -113,3 +113,54 @@ def test_main_exits_cleanly_when_jenkins_unconfigured(caplog, monkeypatch):
     worker.main()  # must return, not raise or loop
 
     assert "Jenkins is not configured" in caplog.text
+
+
+# --- final review fixes -----------------------------------------------------
+
+def test_repeated_lease_expiry_eventually_fails(queued_event):
+    t0 = utcnow()
+
+    with session_scope() as session:
+        claim_next(session, t0)
+
+    for n in range(1, 4):
+        with session_scope() as session:
+            claim_next(session, t0 + timedelta(seconds=601 * n))
+
+    with session_scope() as session:
+        event = session.get(Event, queued_event)
+        assert event.status == "failed"
+        assert event.attempts == 3
+        assert "lease" in event.last_error
+
+
+def test_stale_worker_cannot_finalize(fake_llm, queued_event, jenkins):
+    import pytest
+
+    from pipeline import StaleClaimError, process_event
+    from worker import _record_failure
+
+    t0 = utcnow()
+    t1 = t0 + timedelta(seconds=601)
+
+    with session_scope() as session:
+        claim_next(session, t0)                      # worker A
+    with session_scope() as session:
+        claim_next(session, t1)                      # worker B after A's lease expired
+
+    fake_llm(responses_for(COMPILATION_LOG, "cannot find symbol", "compilation"))
+    with session_scope() as session:
+        process_event(session, session.get(Event, queued_event), jenkins, claimed_at=t1)
+
+    # Worker A finishes late: neither success nor failure may touch the event.
+    fake_llm(responses_for(COMPILATION_LOG, "cannot find symbol", "compilation"))
+    with pytest.raises(StaleClaimError):
+        with session_scope() as session:
+            process_event(session, session.get(Event, queued_event), jenkins, claimed_at=t0)
+
+    _record_failure(queued_event, RuntimeError("late"), t1, claimed_at=t0)
+
+    with session_scope() as session:
+        event = session.get(Event, queued_event)
+        assert event.status == "done"
+        assert event.last_error is None

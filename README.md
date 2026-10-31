@@ -230,6 +230,8 @@ Before upload, the app redacts tokens, passwords, credentialed URLs, API keys an
 - It records the remediation it *would* take.
 - Reviewers label each classification at `/ui/`, which builds per-category accuracy.
 
+> **Data handling:** the worker sends redacted console excerpts to Groq's hosted API. Only point it at a production Jenkins (backfill or webhook) once your team has approved sending these logs to Groq (open item: *LLM data handling* in the design doc).
+
 **Start it** (VPN required for real Jenkins):
 
 ```bash
@@ -267,7 +269,7 @@ With Docker, `docker compose up --build` also starts the `worker` service. It ex
 
 | Final category | Proposed action | Would be allowed when |
 |---|---|---|
-| `infra` | `rerun` (same parameters) | job matches `RERUN_JOB_ALLOWLIST` |
+| `infra` | `rerun` (stores job, build URL and parameter *names*; values are re-fetched from Jenkins at execution time in P2) | job matches `RERUN_JOB_ALLOWLIST` |
 | `devops` | `notify_owner` | `EMAIL_ID` is set |
 | `compilation` | `exclude_culprit` (Gerrit change from `GERRIT_*` build params) | the build has a Gerrit change number |
 | `needs_triage` | none | — |
@@ -311,7 +313,7 @@ With Docker, `docker compose up --build` also starts the `worker` service. It ex
 | Windows: `py -3.12` not found | Install Python 3.12 from python.org (it includes the `py` launcher), or use `uv venv --python 3.12 .venv`. |
 | Webhook returns `503` | `JENKINS_WEBHOOK_TOKEN` not set in `backend/.env`. |
 | Webhook returns `422` | `build_url` is not under `JENKINS_URL`. |
-| Event stuck in `queued` / ends `failed` | Check `last_error` on the event in `/ui/`; Jenkins unreachable or Groq unavailable. Retries back off 60 s, 120 s, then the event is marked failed. |
+| Event stuck in `queued` / ends `failed` | Check `last_error` on the event in `/ui/`; Jenkins unreachable or Groq unavailable. Retries back off 60 s, 120 s, then the event is marked failed. After the outage: `python -m manage requeue --status failed`. |
 | `/ui/` keeps asking for a password | Wrong credentials; reset with `python -m manage set-password <user>`. |
 
 ---

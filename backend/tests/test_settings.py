@@ -49,6 +49,10 @@ def test_default_database_is_absolute_sqlite_path(monkeypatch):
     get_settings.cache_clear()
 
     url = get_settings().database_url
+    path = url.removeprefix("sqlite:///")
 
-    assert url.startswith("sqlite:////")
-    assert url.endswith("/data/remediation.db")
+    # Portable: POSIX "/home/..." or Windows "C:/..." both count as absolute.
+    assert url.startswith("sqlite:///")
+    assert "\\" not in url
+    assert Path(path).is_absolute()
+    assert path.endswith("/data/remediation.db")

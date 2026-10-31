@@ -45,6 +45,25 @@ class BuildRef:
     result: str | None
 
 
+def job_path(job: str) -> str:
+    """'folder/name' -> 'job/folder/job/name/', encoded the way Jenkins does."""
+
+    return "".join(
+        f"job/{quote(part, safe='')}/" for part in job.split("/") if part
+    )
+
+
+def build_url_for(base_url: str, job: str, build_number: int) -> str:
+    """Canonical build URL under our configured base, never caller-supplied."""
+
+    return base_url.rstrip("/") + "/" + job_path(job) + f"{build_number}/"
+
+
+def _is_success(status_code: int) -> bool:
+    # Redirects count as failures: they usually mean an SSO/login page.
+    return 200 <= status_code < 300
+
+
 def _read_only_guard(request: httpx.Request) -> None:
     if request.method != "GET":
         raise JenkinsError(f"read-only client refused {request.method}")
@@ -89,12 +108,17 @@ class JenkinsClient:
                 f"{type(err).__name__} for {self._describe(url)}"
             ) from err
 
-        if response.status_code >= 400:
+        if not _is_success(response.status_code):
             raise JenkinsError(
                 f"HTTP {response.status_code} for {self._describe(url)}"
             )
 
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as err:
+            raise JenkinsError(
+                f"non-JSON response for {self._describe(url)}"
+            ) from err
 
     def get_build_info(self, build_url: str) -> BuildInfo:
         data = self._get_json(
@@ -137,7 +161,7 @@ class JenkinsClient:
 
         try:
             with self._http.stream("GET", url) as response:
-                if response.status_code >= 400:
+                if not _is_success(response.status_code):
                     raise JenkinsError(
                         f"HTTP {response.status_code} for {self._describe(url)}"
                     )
@@ -178,21 +202,25 @@ class JenkinsClient:
         if response.status_code == 404:
             return None
 
-        if response.status_code >= 400:
+        if not _is_success(response.status_code):
             raise JenkinsError(
                 f"HTTP {response.status_code} for {self._describe(url)}"
             )
 
+        try:
+            stages = response.json().get("stages") or []
+        except ValueError as err:
+            raise JenkinsError(
+                f"non-JSON response for {self._describe(url)}"
+            ) from err
+
         return [
             Stage(name=stage.get("name", ""), status=stage.get("status", ""))
-            for stage in response.json().get("stages") or []
+            for stage in stages
         ]
 
     def job_url(self, job: str) -> str:
-        segments = [part for part in job.split("/") if part]
-        return self.base_url + "".join(
-            f"job/{quote(part, safe='')}/" for part in segments
-        )
+        return self.base_url + job_path(job)
 
     def list_builds(self, job: str, limit: int) -> list[BuildRef]:
         data = self._get_json(

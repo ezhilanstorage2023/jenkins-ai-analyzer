@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from clients.jenkins import JenkinsClient, JenkinsError, jenkins_client_from_settings
 from llm import LLMError
 from logging_config import configure_logging
-from pipeline import process_event
+from pipeline import StaleClaimError, process_event
 from settings import get_settings
 from store.db import session_scope, utcnow
 from store.models import Event
@@ -38,6 +38,14 @@ def claim_next(session: Session, now: datetime) -> Event | None:
     if candidate is None:
         return None
 
+    # Reclaiming an expired lease means the previous attempt died or hung:
+    # count it, so a poison event cannot loop forever.
+    reclaim = candidate.status == "processing"
+    values = {"status": "processing", "claimed_at": now}
+
+    if reclaim:
+        values["attempts"] = Event.attempts + 1
+
     seen_claimed = (
         Event.claimed_at.is_(None)
         if candidate.claimed_at is None
@@ -52,14 +60,26 @@ def claim_next(session: Session, now: datetime) -> Event | None:
             Event.status == candidate.status,
             seen_claimed,
         )
-        .values(status="processing", claimed_at=now)
+        .values(**values)
         .execution_options(synchronize_session=False)
     ).rowcount
 
     if claimed != 1:
         return None
 
-    return session.get(Event, candidate.id, populate_existing=True)
+    event = session.get(Event, candidate.id, populate_existing=True)
+
+    if reclaim and event.attempts >= get_settings().worker_max_attempts:
+        event.status = "failed"
+        event.claimed_at = None
+        event.last_error = "Worker lease expired (crashed or exceeded worker_lease_seconds)"
+        logger.warning(
+            "Event failed after repeated lease expiry",
+            extra={"event_id": event.id, "attempts": event.attempts},
+        )
+        return None
+
+    return event
 
 
 def _describe(err: Exception) -> str:
@@ -70,24 +90,53 @@ def _describe(err: Exception) -> str:
     return type(err).__name__
 
 
-def _record_failure(event_id: int, err: Exception, now: datetime) -> None:
+def _record_failure(
+    event_id: int,
+    err: Exception,
+    now: datetime,
+    claimed_at: datetime,
+) -> None:
     settings = get_settings()
 
     with session_scope() as session:
         event = session.get(Event, event_id)
-        event.attempts += 1
-        event.last_error = _describe(err)[:500]
-        event.claimed_at = None
+        attempts = event.attempts + 1
 
-        if event.attempts >= settings.worker_max_attempts:
-            event.status = "failed"
+        if attempts >= settings.worker_max_attempts:
+            values = {"status": "failed"}
         else:
-            event.status = "queued"
-            event.next_attempt_at = now + timedelta(
-                seconds=settings.worker_backoff_seconds * 2 ** (event.attempts - 1)
-            )
+            values = {
+                "status": "queued",
+                "next_attempt_at": now + timedelta(
+                    seconds=settings.worker_backoff_seconds * 2 ** (attempts - 1)
+                ),
+            }
 
-        status, attempts = event.status, event.attempts
+        # Fenced: a worker whose claim was taken over must not touch the event.
+        updated = session.execute(
+            update(Event)
+            .where(
+                Event.id == event_id,
+                Event.status == "processing",
+                Event.claimed_at == claimed_at,
+            )
+            .values(
+                attempts=attempts,
+                last_error=_describe(err)[:500],
+                claimed_at=None,
+                **values,
+            )
+            .execution_options(synchronize_session=False)
+        ).rowcount
+
+    if updated != 1:
+        logger.warning(
+            "Stale worker result discarded",
+            extra={"event_id": event_id, "error_type": type(err).__name__},
+        )
+        return
+
+    status = values["status"]
 
     logger.warning(
         "Event processing failed",
@@ -106,15 +155,23 @@ def run_once(jenkins: JenkinsClient, now: datetime | None = None) -> bool:
     with session_scope() as session:
         event = claim_next(session, now)
         event_id = event.id if event else None
+        claimed_at = event.claimed_at if event else None
 
     if event_id is None:
         return False
 
     try:
         with session_scope() as session:
-            process_event(session, session.get(Event, event_id), jenkins)
+            process_event(
+                session,
+                session.get(Event, event_id),
+                jenkins,
+                claimed_at,
+            )
+    except StaleClaimError:
+        logger.warning("Stale claim; result discarded", extra={"event_id": event_id})
     except Exception as err:
-        _record_failure(event_id, err, now)
+        _record_failure(event_id, err, now, claimed_at)
 
     return True
 

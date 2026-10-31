@@ -36,7 +36,7 @@ _RULES = [
         r"\1" + REDACTED,
     ),
     (
-        re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@"),
+        re.compile(r"(?i)\b([a-z][a-z0-9+.-]{0,30}://)[^/\s:@]+:[^/\s@]+@"),
         r"\1" + REDACTED + "@",
     ),
     (
@@ -50,7 +50,7 @@ _RULES = [
     (
         # name=value
         re.compile(
-            r"(?i)(?<![A-Za-z0-9])(" + _SECRET_IDENTIFIER + r")[ \t]*=[ \t]*"
+            r"(?i)(?<![A-Za-z0-9_-])(" + _SECRET_IDENTIFIER + r")[ \t]*=[ \t]*"
             r"(\"[^\"\n]*\"|'[^'\n]*'|\S+)"
         ),
         r"\1=" + REDACTED,
@@ -66,7 +66,7 @@ _RULES = [
         # YAML-style "password: value" at line start. "token" is excluded
         # so compiler text like "Unexpected token: '}'" is untouched.
         re.compile(
-            r"(?im)^([ \t-]*[A-Za-z0-9_-]*?"
+            r"(?im)^([ \t-]*(?:[A-Za-z0-9_]+[_-])?"
             r"(?:password|passwd|secret|api[_-]?key|client[_-]?secret)"
             r"[A-Za-z0-9_]*[ \t]*:[ \t]+)\S.*$"
         ),
@@ -95,7 +95,13 @@ def redact(text: str) -> str:
     return text
 
 
-_SECRET_KEY = re.compile(_SECRET_IDENTIFIER, re.IGNORECASE)
+# Parameter *names* that mark the value as secret. Broad on purpose: a
+# false positive only hides a value; a miss stores and shows a credential.
+_SECRET_PARAM_NAME = re.compile(
+    r"pass|pwd|secret|token|auth|cred|api[_-]?key|private[_-]?key"
+    r"|ssh[_-]?key|keystore|cert",
+    re.IGNORECASE,
+)
 
 
 def redact_mapping(values: dict[str, str]) -> dict[str, str]:
@@ -106,6 +112,6 @@ def redact_mapping(values: dict[str, str]) -> dict[str, str]:
     """
 
     return {
-        name: REDACTED if _SECRET_KEY.fullmatch(name) else redact(value)
+        name: REDACTED if _SECRET_PARAM_NAME.search(name) else redact(value)
         for name, value in values.items()
     }

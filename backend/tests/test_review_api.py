@@ -175,3 +175,19 @@ def test_ui_labels_actions_as_shadow():
     page = (STATIC / "index.html").read_text() + (STATIC / "review.js").read_text()
 
     assert "Proposed (shadow — not executed)" in page
+
+
+def test_label_commit_failure_not_reported_saved(seeded, labeler, monkeypatch):
+    from sqlalchemy.orm import Session
+
+    def broken_commit(self):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(Session, "commit", broken_commit)
+    failing_client = TestClient(main.app, raise_server_exceptions=False)
+
+    response = failing_client.post(
+        f"/api/events/{seeded.infra}/label", json={"verdict": "correct"}, auth=labeler
+    )
+
+    assert response.status_code == 500

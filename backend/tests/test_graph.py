@@ -110,3 +110,15 @@ def test_partly_invented_evidence_fails_validation(fake_llm):
 
     assert response["validated"] is False
     assert response["error_category"] == "needs_triage"
+
+
+def test_analyze_log_fast_on_long_lines(fake_llm):
+    import time
+
+    fake_llm(["garbage"] * 3)
+    log = "a-" * 500_000 + "\nERROR: build failed"
+
+    start = time.monotonic()
+    analyze_log(log)
+
+    assert time.monotonic() - start < 3.0

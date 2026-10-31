@@ -107,3 +107,30 @@ def test_secret_parameters_redacted():
     assert out["API_TOKEN"] == "[REDACTED]"
     assert "u:p@" not in out["TARGET"]
     assert out["BRANCH"] == "main"
+
+
+@pytest.mark.parametrize("name", [
+    "DB_PASS", "SSH_KEY", "PRIVATE_KEY", "CREDENTIALS", "KEYSTORE_PASS", "AUTH",
+])
+def test_more_secret_parameter_names_redacted(name):
+    assert redact_mapping({name: "s3cr3t"})[name] == "[REDACTED]"
+
+
+def test_ordinary_parameter_names_kept():
+    params = {"BRANCH": "main", "GERRIT_CHANGE_ID": "I1", "TARGET_ENV": "qa"}
+
+    assert redact_mapping(params) == params
+
+
+@pytest.mark.parametrize("raw", [
+    "-" * 5000,
+    "a-" * 20000,
+    "x" * 40000,
+])
+def test_redaction_is_fast_on_long_lines(raw):
+    import time
+
+    start = time.monotonic()
+    redact(raw)
+
+    assert time.monotonic() - start < 1.0

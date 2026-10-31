@@ -133,3 +133,36 @@ def test_only_get_requests_are_made():
 def test_from_settings_requires_configuration():
     with pytest.raises(JenkinsError):
         jenkins_client_from_settings()
+
+
+def test_console_redirect_is_jenkins_error():
+    client, _ = make({BUILD_PATH + "consoleText": (302, "moved")})
+
+    with pytest.raises(JenkinsError):
+        client.get_console(BUILD)
+
+
+def test_json_redirect_is_jenkins_error():
+    client, _ = make({BUILD_PATH + "api/json": (301, "moved")})
+
+    with pytest.raises(JenkinsError):
+        client.get_build_info(BUILD)
+
+
+def test_html_instead_of_json_is_jenkins_error():
+    client, _ = make({BUILD_PATH + "api/json": (200, "<html>login</html>")})
+
+    with pytest.raises(JenkinsError):
+        client.get_build_info(BUILD)
+
+
+def test_build_url_for_encodes_folders():
+    from clients.jenkins import build_url_for
+
+    assert build_url_for(BASE, "team a/build", 3) == (
+        "https://ci.example.com/job/team%20a/job/build/3/"
+    )
+    # Multibranch names arrive pre-encoded in JOB_NAME; Jenkins encodes again.
+    assert build_url_for(BASE, "repo/feature%2Fx", 1) == (
+        "https://ci.example.com/job/repo/job/feature%252Fx/1/"
+    )

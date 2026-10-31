@@ -2,7 +2,9 @@
 
 import logging
 from dataclasses import asdict
+from datetime import datetime
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from classification.reconcile import reconcile
@@ -18,8 +20,18 @@ from store.models import Analysis, Enrichment, Event, ProposedAction
 logger = logging.getLogger("pipeline")
 
 
-def process_event(session: Session, event: Event, jenkins: JenkinsClient) -> None:
-    """Raises JenkinsError / LLMProviderError unchanged for the worker to retry."""
+class StaleClaimError(Exception):
+    """This worker's lease expired and another worker took the event over."""
+
+
+def process_event(
+    session: Session,
+    event: Event,
+    jenkins: JenkinsClient,
+    claimed_at: datetime,
+) -> None:
+    """Raises JenkinsError / LLMProviderError unchanged for the worker to retry,
+    and StaleClaimError when this worker no longer holds the claim."""
 
     data = enrich(jenkins, event.build_url)
 
@@ -31,7 +43,28 @@ def process_event(session: Session, event: Event, jenkins: JenkinsClient) -> Non
 
     matches = evaluate_rules(data.console.text, data.failing_stage)
     decision = reconcile(analysis, matches)
-    proposal = propose_action(decision.final_category, event.job, data)
+    proposal = propose_action(
+        decision.final_category,
+        event.job,
+        event.build_url,
+        data,
+    )
+
+    # Fence: finish only if this worker still holds the claim. Done first so
+    # a stale worker writes nothing (the transaction rolls back on raise).
+    finished = session.execute(
+        update(Event)
+        .where(
+            Event.id == event.id,
+            Event.status == "processing",
+            Event.claimed_at == claimed_at,
+        )
+        .values(status="done", claimed_at=None, last_error=None)
+        .execution_options(synchronize_session=False)
+    ).rowcount
+
+    if finished != 1:
+        raise StaleClaimError(f"event {event.id} was claimed by another worker")
 
     now = utcnow()
 
@@ -70,10 +103,6 @@ def process_event(session: Session, event: Event, jenkins: JenkinsClient) -> Non
             reason_codes=proposal.reason_codes,
             created_at=now,
         ))
-
-    event.status = "done"
-    event.claimed_at = None
-    event.last_error = None
 
     logger.info(
         "Event processed",

@@ -39,21 +39,28 @@ pipeline {
     post {
         failure {
             script {
-                def payload = groovy.json.JsonOutput.toJson([
-                    job         : env.JOB_NAME,
-                    build_number: env.BUILD_NUMBER as int,
-                    build_url   : env.BUILD_URL,
-                    result      : 'FAILURE',
-                ])
-                writeFile file: 'remediation-payload.json', text: payload
-                withCredentials([string(credentialsId: 'remediation-webhook-token', variable: 'HOOK_TOKEN')]) {
-                    sh '''
-                        curl -fsS --max-time 10 \
-                          -H "X-Webhook-Token: $HOOK_TOKEN" \
-                          -H 'Content-Type: application/json' \
-                          --data @remediation-payload.json \
-                          "$REMEDIATION_URL/webhooks/jenkins" || true
-                    '''
+                // Never let the webhook change the build's outcome.
+                try {
+                    def payload = groovy.json.JsonOutput.toJson([
+                        job         : env.JOB_NAME,
+                        build_number: env.BUILD_NUMBER as int,
+                        build_url   : env.BUILD_URL,
+                        result      : 'FAILURE',
+                    ])
+                    writeFile file: 'remediation-payload.json', text: payload
+                    withCredentials([string(credentialsId: 'remediation-webhook-token', variable: 'HOOK_TOKEN')]) {
+                        // The header goes in via curl's stdin config (printf is a shell
+                        // builtin), so the token never appears in the agent's process list.
+                        sh '''
+                            printf 'header = "X-Webhook-Token: %s"\n' "$HOOK_TOKEN" | \
+                            curl -fsS --max-time 10 --config - \
+                              -H 'Content-Type: application/json' \
+                              --data @remediation-payload.json \
+                              "$REMEDIATION_URL/webhooks/jenkins" || true
+                        '''
+                    }
+                } catch (err) {
+                    echo "Remediation webhook skipped: ${err}"
                 }
             }
         }
@@ -62,6 +69,7 @@ pipeline {
 ```
 
 Notes:
+- `build_url` must be exactly `<JENKINS_URL>/job/<name>/<build number>/` for the given `job`. The service rejects any other URL, query string or controller id with 422, so `env.BUILD_URL` must use the same root URL as `JENKINS_URL` (it does for apac-ci today).
 - `post` needs an agent for `writeFile` and `sh`. With `agent none`, wrap the block in `node { ... }`.
 - On Windows agents, use `bat` with `curl.exe` and `%HOOK_TOKEN%`.
 - If the Groovy sandbox blocks `JsonOutput`, use the shared-library variant below; libraries run trusted.
@@ -94,10 +102,12 @@ Content-Type: application/json
 | `200 {"event_id": N, "duplicate": true}` | Already known (Jenkins retry or backfill) |
 | `200 {"status": "ignored"}` | `result` was not `FAILURE` |
 | `401` | Missing or wrong token |
-| `422` | `build_url` not under `JENKINS_URL`, or invalid payload |
+| `422` | `build_url` not exactly this job's build under `JENKINS_URL`, unknown `controller_id`, or invalid payload |
 | `503` | `JENKINS_WEBHOOK_TOKEN` not configured on the service |
 
 ## 5. Try it without touching Jenkins pipelines
+
+> **Data handling:** this sends redacted console excerpts to Groq's hosted API. Run it against a production Jenkins only once your team has approved that (open item *LLM data handling* in the design doc).
 
 Backfill recent failures of one job. This is read-only against Jenkins:
 

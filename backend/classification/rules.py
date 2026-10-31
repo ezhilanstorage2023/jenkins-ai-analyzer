@@ -34,7 +34,7 @@ RULES = [
           r"Could not resolve host|Temporary failure in name resolution"
           r"|Connection refused|Connection timed out|Read timed out"),
     _rule("infra.artifactory_5xx", "infra",
-          r"artifactory\S*.*\b(500|502|503|504)\b"),
+          r"artifactory[^\n]*?\b50[0234]\b"),
     _rule("devops.missing_credentials", "devops",
           r"Could not find credentials entry"),
     _rule("devops.permission_denied", "devops", r"Permission denied"),
@@ -44,7 +44,8 @@ RULES = [
           r"WorkflowScript: \d+:|No such DSL method"
           r"|groovy\.lang\.MissingPropertyException"),
     _rule("compilation.compiler_error", "compilation",
-          r"\S+\.(java|kt|scala|c|cc|cpp|cxx|h|hpp|go|cs|ts|rs):\d+(:\d+)?:?\s+(fatal )?error"
+          # No leading \S+ (quadratic on long tokens); the extension anchors it.
+          r"\.(java|kt|scala|c|cc|cpp|cxx|h|hpp|go|cs|ts|rs):\d+(:\d+)?:?\s+(fatal )?error"
           r"|error: cannot find symbol|undefined reference to"
           r"|COMPILATION ERROR|Compilation failed"),
     _rule("tests.failures", "needs_triage",

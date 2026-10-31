@@ -136,3 +136,15 @@ def extract_error_context(
         blocks.append("\n".join(formatted_lines))
 
     return "\n\n--- ERROR CONTEXT ---\n\n".join(blocks)
+
+MAX_LINE_LENGTH = 4096
+
+
+def cap_line_length(text, limit=MAX_LINE_LENGTH):
+    """Truncate overlong lines (e.g. huge compiler command lines).
+
+    Keeps the line count, so "[Line N]" numbering is unchanged, and bounds
+    the cost of every per-line regex that runs afterwards.
+    """
+
+    return "\n".join(line[:limit] for line in text.split("\n"))

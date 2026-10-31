@@ -168,6 +168,8 @@ def label_event(
     label.note = body.note
     label.created_at = utcnow()
     session.add(label)
+    # Commit before answering: "saved" must mean saved.
+    session.commit()
 
     return {"status": "saved"}
 

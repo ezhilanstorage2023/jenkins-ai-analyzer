@@ -77,3 +77,31 @@ def test_enrich_redacts_console_and_params():
     assert data.gerrit_scope["change_number"] == "48213"
     assert data.failing_stage == "Compile"
     assert data.console.text.count("\n") == console.count("\n")
+
+
+def test_long_lines_capped_line_count_kept_and_fast():
+    import time
+
+    console = "start\n" + "a-" * 500_000 + "\n" + "end FAILED"
+    fake = FakeJenkins({
+        BUILD_PATH + "api/json": (200, {"result": "FAILURE", "actions": []}),
+        BUILD_PATH + "consoleText": (200, console),
+    })
+    client = JenkinsClient(
+        "https://ci.example.com/", "u", "tok",
+        timeout=5, max_log_bytes=5_000_000, transport=fake.transport,
+    )
+
+    start = time.monotonic()
+    data = enrich(client, BUILD)
+
+    assert time.monotonic() - start < 3.0
+    assert data.console.text.count("\n") == console.count("\n")
+    assert max(len(line) for line in data.console.text.splitlines()) <= 4096
+
+
+def test_failing_stage_handles_crlf_logs():
+    # Windows agents (or a CRLF checkout of the fixtures) end lines with \r\n.
+    log = (FIX / "compilation_java_symbol.log").read_text().replace("\n", "\r\n")
+
+    assert failing_stage(None, log) == "Compile"

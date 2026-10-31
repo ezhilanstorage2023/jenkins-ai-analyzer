@@ -27,6 +27,7 @@ def _proposal(action_type: str, target: dict, ok: bool, reason: str) -> ActionPr
 def propose_action(
     final_category: str,
     job: str,
+    build_url: str,
     enrichment: EnrichmentData,
 ) -> ActionProposal | None:
     settings = get_settings()
@@ -36,9 +37,15 @@ def propose_action(
             fnmatch(job, pattern) for pattern in settings.rerun_job_allowlist
         )
 
+        # Stored parameters are redacted: the executor (P2) must re-fetch
+        # the original values from Jenkins at execution time.
         return _proposal(
             "rerun",
-            {"job": job, "parameters": enrichment.build.parameters},
+            {
+                "job": job,
+                "build_url": build_url,
+                "parameter_names": sorted(enrichment.build.parameters),
+            },
             allowed,
             "job_not_allowed",
         )

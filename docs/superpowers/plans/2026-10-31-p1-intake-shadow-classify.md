@@ -756,5 +756,6 @@ Move the shared fixtures (`webhook_env`, `jenkins`, `queued_event`, `compilation
 - Failures flow end to end, webhook → worker → DB → UI, with nothing written to Jenkins, Gerrit or email (`test_webhook_to_review_end_to_end`).
 - Classification accuracy is measurable per category from DevOps labels (`/api/metrics/accuracy`).
 - Before the webhook is pointed at a production controller:
-  - **Open item #4** (approval to send redacted build logs to Groq) is resolved.
-  - **Open item #5** (hosting target and identity provider) is decided.
+  - The **LLM data handling** open item (approval to send redacted build logs to Groq) is resolved.
+  - The **hosting target and identity provider** open item is decided.
+  (Named rather than numbered: the design doc and architecture doc number their open items differently.)

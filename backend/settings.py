@@ -31,9 +31,12 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    database_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'remediation.db'}"
+    # as_posix(): forward slashes, so the URL is valid on Windows too.
+    database_url: str = f"sqlite:///{(BACKEND_DIR / 'data' / 'remediation.db').as_posix()}"
 
     jenkins_url: str | None = None
+    # Single controller in P1; webhooks for any other id are rejected.
+    jenkins_controller_id: str = "default"
     jenkins_username: str | None = None
     jenkins_api_token: SecretStr | None = None
     jenkins_webhook_token: SecretStr | None = None

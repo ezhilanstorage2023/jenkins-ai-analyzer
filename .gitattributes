@@ -1,0 +1,2 @@
+# Fixture logs stay LF on every OS (tests count lines and match stage markers).
+backend/tests/fixtures/logs/*.log text eol=lf

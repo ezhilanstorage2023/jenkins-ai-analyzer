@@ -5,7 +5,7 @@ python -m backfill --job <folder/name> --count 50
 
 import argparse
 
-from clients.jenkins import JenkinsClient, jenkins_client_from_settings
+from clients.jenkins import JenkinsClient, build_url_for, jenkins_client_from_settings
 from store.db import session_scope, utcnow
 from store.models import Event
 
@@ -40,7 +40,8 @@ def backfill(
                 controller_id=controller_id,
                 job=job,
                 build_number=build.number,
-                build_url=build.url,
+                # Built from our configured base, not Jenkins' reported root.
+                build_url=build_url_for(jenkins.base_url, job, build.number),
                 result=build.result,
                 source="backfill",
                 next_attempt_at=now,

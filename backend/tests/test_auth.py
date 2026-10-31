@@ -89,3 +89,22 @@ def test_manage_set_password(monkeypatch, users):
     with session_scope() as session:
         user = session.query(User).filter_by(username="viewer1").one()
         assert verify_password("new-pw", user.password_hash)
+
+
+def test_manage_requeue_failed_events():
+    from store.db import utcnow
+    from store.models import Event
+
+    with session_scope() as session:
+        session.add(Event(
+            controller_id="default", job="j", build_number=1,
+            build_url="https://ci.example.com/job/j/1/", source="webhook",
+            status="failed", attempts=3, last_error="JenkinsError: HTTP 503",
+            next_attempt_at=utcnow(), received_at=utcnow(),
+        ))
+
+    manage.main(["requeue", "--status", "failed"])
+
+    with session_scope() as session:
+        event = session.query(Event).one()
+        assert (event.status, event.attempts, event.last_error) == ("queued", 0, None)

@@ -3,9 +3,12 @@ import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field
+from urllib.parse import urlsplit
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from clients.jenkins import build_url_for
 from settings import get_settings
 from store.db import get_session, utcnow
 from store.models import Event
@@ -17,10 +20,10 @@ router = APIRouter()
 
 
 class JenkinsFailureHook(BaseModel):
-    controller_id: str = "default"
-    job: str = Field(min_length=1)
-    build_number: int = Field(ge=1)
-    build_url: str
+    controller_id: str = Field(default="default", max_length=100)
+    job: str = Field(min_length=1, max_length=500)
+    build_number: int = Field(ge=1, le=2**31 - 1)
+    build_url: str = Field(max_length=1000)
     result: str | None = None
 
 
@@ -51,12 +54,27 @@ def receive_jenkins_failure(
     ):
         raise HTTPException(401, "Invalid webhook token.")
 
+    if hook.controller_id != settings.jenkins_controller_id:
+        raise HTTPException(422, "Unknown controller_id.")
+
     base = settings.jenkins_base_url
 
     if base is None or not url_under_base(hook.build_url, base):
         raise HTTPException(
             422,
             "build_url is not under the configured Jenkins URL."
+        )
+
+    # The URL must be exactly this job's build: otherwise a payload could
+    # make the service account read another job's console, or poison the
+    # dedupe key for the real build.
+    canonical = build_url_for(base, hook.job, hook.build_number)
+    sent = urlsplit(hook.build_url)
+
+    if sent.query or sent.fragment or sent.path != urlsplit(canonical).path:
+        raise HTTPException(
+            422,
+            "build_url does not match job and build_number."
         )
 
     if hook.result is not None and hook.result.upper() != "FAILURE":
@@ -74,7 +92,7 @@ def receive_jenkins_failure(
         controller_id=hook.controller_id,
         job=hook.job,
         build_number=hook.build_number,
-        build_url=hook.build_url,
+        build_url=canonical,
         result=hook.result,
         source="webhook",
         next_attempt_at=now,
@@ -83,7 +101,8 @@ def receive_jenkins_failure(
 
     try:
         session.add(event)
-        session.flush()
+        # Commit before answering: 202 must mean the event is stored.
+        session.commit()
     except IntegrityError:
         # A concurrent delivery of the same build won the insert.
         session.rollback()

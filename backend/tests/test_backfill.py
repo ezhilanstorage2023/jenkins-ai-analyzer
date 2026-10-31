@@ -38,3 +38,20 @@ def test_backfill_skips_existing_events(jenkins_builds):
     backfill(jenkins_builds, "acme/build", 3)
 
     assert backfill(jenkins_builds, "acme/build", 3) == (0, 2)
+
+
+def test_backfill_builds_url_from_configured_base():
+    # Jenkins reports its own root URL, which may differ from JENKINS_URL.
+    fake = FakeJenkins({"/job/acme/job/build/api/json": (200, {"builds": [
+        {"number": 9, "url": "http://jenkins-internal:8080/job/acme/job/build/9/",
+         "result": "FAILURE"},
+    ]})})
+    client = JenkinsClient(BASE, "svc", "tok", timeout=5, max_log_bytes=1000,
+                           transport=fake.transport)
+
+    backfill(client, "acme/build", 1)
+
+    with session_scope() as session:
+        assert session.query(Event).one().build_url == (
+            "https://ci.example.com/job/acme/job/build/9/"
+        )

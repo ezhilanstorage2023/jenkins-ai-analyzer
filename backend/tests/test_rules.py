@@ -81,3 +81,23 @@ def test_low_confidence_and_unvalidated_reasons():
 
 def test_missing_llm_category_is_triage():
     assert reconcile(A(None), []).final_category == "needs_triage"
+
+
+@pytest.mark.parametrize("line, stage", [
+    ("artifactory" + "x" * 20000, None),
+    ("y" * 20000 + ".javaz", "Compile"),
+    ("z" * 20000, "Compile"),
+])
+def test_rules_are_fast_on_long_lines(line, stage):
+    import time
+
+    start = time.monotonic()
+    evaluate_rules(line, stage)
+
+    assert time.monotonic() - start < 1.0
+
+
+def test_compiler_rule_still_matches_without_path_prefix():
+    assert evaluate_rules("src/Foo.java:3: error: x", "Compile")[0].rule_id == (
+        "compilation.compiler_error"
+    )
