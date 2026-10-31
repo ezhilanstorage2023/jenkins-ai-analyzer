@@ -20,6 +20,7 @@ Thumbs.db
 
 # Logs
 *.log
+!backend/tests/fixtures/logs/*.log
 
 # Python cache
 .pytest_cache/
@@ -30,3 +31,6 @@ node_modules/
 # Build/cache
 dist/
 build/
+
+# LibreOffice lock files
+.~lock.*#

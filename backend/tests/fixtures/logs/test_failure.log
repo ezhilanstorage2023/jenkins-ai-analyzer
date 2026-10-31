@@ -1,0 +1,34 @@
+Started by an SCM change
+[Pipeline] Start of Pipeline
+[Pipeline] node
+Running on agent-05 in /home/jenkins/workspace/acme-service_main
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Test)
+[Pipeline] sh
++ mvn -B test
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.acme.FooTest
+[ERROR] Tests run: 14, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.84 s <<< FAILURE! - in com.acme.FooTest
+[ERROR] testParse(com.acme.FooTest)  Time elapsed: 0.02 s  <<< FAILURE!
+org.opentest4j.AssertionFailedError: expected: <3> but was: <2>
+	at com.acme.FooTest.testParse(FooTest.java:57)
+FAILED: com.acme.FooTest.testParse
+[INFO]
+[INFO] Results:
+[INFO]
+[ERROR] Failures:
+[ERROR]   FooTest.testParse:57 expected: <3> but was: <2>
+[ERROR]   FooTest.testParseEmpty:71 expected: <true> but was: <false>
+[INFO]
+[ERROR] Tests run: 120, Failures: 2, Errors: 0, Skipped: 1
+[INFO] BUILD FAILURE
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] }
+[Pipeline] // node
+[Pipeline] End of Pipeline
+ERROR: script returned exit code 1
+Finished: FAILURE

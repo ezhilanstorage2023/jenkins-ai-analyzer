@@ -1,4 +1,5 @@
 from graph import build_analysis_response, validate_analysis
+from models import AnalysisResponse
 
 
 def test_validation_rejects_missing_evidence():
@@ -65,21 +66,54 @@ def test_validation_rejects_empty_fix():
     assert len(problems) > 0
 
 
-def test_build_analysis_response_includes_error_category():
-    result = {
-        "detected_errors": {
-            "main_error": "Compilation failed"
-        },
-        "root_cause": {
-            "root_cause": "Application source does not compile",
-            "error_category": "Developer-Side Error",
-            "affected_component": "compiler",
-            "evidence": ["ERROR: Compilation failed"],
-            "recommended_fix": "Correct the source compilation error",
-            "confidence": "high",
-        },
-    }
+VALID_ROOT_CAUSE = {
+    "root_cause": "src does not compile",
+    "error_category": "compilation",
+    "evidence": ["[Line 3] error: cannot find symbol"],
+    "recommended_fix": "fix import",
+    "confidence": "high",
+    "affected_component": "javac",
+}
 
-    response = build_analysis_response(result, "build.log")
 
-    assert response["error_category"] == "Developer-Side Error"
+def test_validated_result_keeps_llm_category():
+    response = build_analysis_response(
+        {
+            "detected_errors": {"main_error": "javac failed"},
+            "root_cause": VALID_ROOT_CAUSE,
+            "validation_result": {"valid": True, "reason": "ok"},
+            "attempt_count": 1,
+        },
+        "b.log"
+    )
+
+    assert response["error_category"] == "compilation"
+    assert response["validated"] is True
+    assert response["attempts"] == 1
+    AnalysisResponse(**response)
+
+
+def test_unvalidated_result_forced_to_needs_triage():
+    response = build_analysis_response(
+        {
+            "detected_errors": {},
+            "root_cause": VALID_ROOT_CAUSE,
+            "validation_result": {"valid": False, "reason": "unsupported"},
+            "attempt_count": 3,
+        },
+        "b.log"
+    )
+
+    assert response["error_category"] == "needs_triage"
+    assert response["llm_category"] == "compilation"
+    assert response["validated"] is False
+    assert response["validation_reason"] == "unsupported"
+
+
+def test_empty_result_does_not_raise():
+    response = build_analysis_response({}, "b.log")
+
+    assert response["error_category"] == "needs_triage"
+    assert response["failure_summary"] == "Unknown"
+    assert response["confidence"] == "unknown"
+    AnalysisResponse(**response)

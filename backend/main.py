@@ -1,28 +1,21 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-from groq import Groq
-import os
-from utils.log_processor import extract_error_context
-from models import AnalysisResponse
+from starlette.concurrency import run_in_threadpool
+
 from graph import analyze_log, build_analysis_response
-load_dotenv()
+from llm import LLMProviderError, LLMUnavailableError
+from logging_config import configure_logging
+from models import AnalysisResponse
+from settings import get_settings
 
-api_key = os.getenv("GROQ_API_KEY")
+settings = get_settings()
 
-print("Groq API key loaded:", api_key is not None)
-
-client = Groq(
-    api_key=api_key
-)
+configure_logging(settings.log_level)
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,40 +62,42 @@ async def upload_log(file: UploadFile = File(...)):
         "build_failed": build_failed,
     }
 
-@app.get("/test-llm")
-def test_llm():
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {
-                "role": "user",
-                "content": "Explain Jenkins in one sentence."
-            }
-        ]
-    )
-
-    return {
-        "response": response.choices[0].message.content
-    }
 
 @app.post(
     "/analyze-log",
     response_model=AnalysisResponse
 )
 async def analyze_uploaded_log(file: UploadFile = File(...)):
-    content = await file.read()
+    max_upload_bytes = get_settings().max_upload_bytes
+
+    content = await file.read(max_upload_bytes + 1)
+
+    if len(content) > max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Log file exceeds {max_upload_bytes} bytes."
+        )
 
     text = content.decode(
         "utf-8",
         errors="replace"
     )
 
-    result = analyze_log(text)
+    # The graph makes blocking LLM calls; keep them off the event loop.
+    try:
+        result = await run_in_threadpool(analyze_log, text)
+    except LLMUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail="LLM is not configured (GROQ_API_KEY missing)."
+        )
+    except LLMProviderError:
+        raise HTTPException(
+            status_code=503,
+            detail="LLM provider request failed."
+        )
 
-    analysis = build_analysis_response(
+    return build_analysis_response(
         result,
         file.filename
     )
-
-    return analysis

@@ -1,18 +1,21 @@
 from utils.log_processor import extract_error_context
+from utils.redaction import redact
+from models import (
+    DetectedErrors,
+    ErrorCategory,
+    RootCauseResult,
+    ValidationVerdict,
+)
+from settings import get_settings
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
-from dotenv import load_dotenv
-from groq import Groq
 import json
-import os
+import logging
+import llm
 
-load_dotenv()
+logger = logging.getLogger("graph")
 
-api_key = os.getenv("GROQ_API_KEY")
-
-client = Groq(
-    api_key=api_key
-) if api_key else None
+NO_ERROR_CONTEXT = "No error context found in log."
 
 class State(TypedDict):
     log_content: str
@@ -24,7 +27,10 @@ class State(TypedDict):
     attempt_count: int
 
 def parser_node(state: State):
-    print("Parser received the log")
+    logger.debug(
+        "Parser received log",
+        extra={"characters": len(state["log_content"])}
+    )
 
     log = state["log_content"]
 
@@ -40,7 +46,7 @@ def parser_node(state: State):
     # Keep the LLM input within a safe size.
     # Instead of blindly taking the first 10,000 characters,
     # prioritize the latest error contexts.
-    max_characters = 10000
+    max_characters = get_settings().parser_max_characters
 
     if len(parsed_log) > max_characters:
 
@@ -77,6 +83,26 @@ def parser_node(state: State):
                 + block_length
             )
 
+        # The latest block alone exceeds the limit: keep its tail,
+        # cut on line boundaries so "[Line N]" prefixes stay intact.
+        if not selected_blocks:
+            block_lines = blocks[-1].splitlines()
+            tail = []
+            tail_length = 0
+
+            for line in reversed(block_lines):
+                if tail_length + len(line) + 1 > max_characters:
+                    break
+
+                tail.append(line)
+                tail_length += len(line) + 1
+
+            if not tail:
+                tail = [block_lines[-1][:max_characters]]
+
+            tail.reverse()
+            selected_blocks.append("\n".join(tail))
+
         # Restore chronological order
         selected_blocks.reverse()
 
@@ -84,10 +110,6 @@ def parser_node(state: State):
             "\n\n--- ERROR CONTEXT ---\n\n"
             .join(selected_blocks)
         )
-
-    print("\n===== PARSER OUTPUT =====")
-    print(parsed_log)
-    print("===== END PARSER OUTPUT =====\n")
 
     error_count = sum(
         1
@@ -109,17 +131,28 @@ def parser_node(state: State):
         "extracted_characters": len(parsed_log)
     }
 
-    print("Parser metadata:", parser_metadata)
-    print(
-        "Parser extracted:",
-        len(parsed_log),
-        "characters"
-    )
+    logger.info("Parser finished", extra=parser_metadata)
 
-    return {
+    update = {
         "parsed_log": parsed_log,
         "parser_metadata": parser_metadata
     }
+
+    # Nothing for the LLM to analyze: end without calling it.
+    if not parsed_log:
+        update["validation_result"] = {
+            "valid": False,
+            "reason": NO_ERROR_CONTEXT
+        }
+
+    return update
+
+
+def parser_router(state: State):
+    if not state["parsed_log"]:
+        return "end"
+
+    return "continue"
 
 def validate_evidence(evidence, parsed_log):
     valid_evidence = []
@@ -142,8 +175,9 @@ def validate_analysis(result, parsed_log):
             "Root cause has no supporting evidence."
         )
 
-    # 2. Every evidence item must exist exactly in the parsed log
-    for item in evidence:
+    # 2. Every evidence item must exist exactly in the parsed log,
+    #    including items already filtered out by validate_evidence
+    for item in evidence + result.get("rejected_evidence", []):
         if item not in parsed_log:
             problems.append(
                 f"Evidence not found in parsed log: {item}"
@@ -163,8 +197,6 @@ def validate_analysis(result, parsed_log):
     return problems
 
 def error_detector_node(state: State):
-    print("Error Detector received:", state["parsed_log"])
-
     prompt = f"""
 You are an Error Detection Agent analyzing a Jenkins build log.
 
@@ -205,28 +237,19 @@ Rules:
 - If exact evidence cannot be identified, return an empty evidence list.
 """
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
-
-    detected_errors = response.choices[0].message.content
-
-    detected_errors = json.loads(detected_errors)
+    detected_errors = llm.complete_json(
+        prompt,
+        DetectedErrors
+    ).model_dump(mode="json")
 
     detected_errors["evidence"] = validate_evidence(
         detected_errors.get("evidence", []),
         state["parsed_log"]
     )
 
-    print(
-    "Validated evidence:",
-    detected_errors["evidence"]
+    logger.info(
+        "Error detector finished",
+        extra={"evidence_count": len(detected_errors["evidence"])}
     )
 
     return {
@@ -234,11 +257,9 @@ Rules:
     }
 
 def root_cause_node(state: State):
-    print("Root Cause Agent received:", state["detected_errors"])
-
     attempt_count = state["attempt_count"] + 1
 
-    print("Root Cause Agent attempt:", attempt_count)
+    logger.info("Root cause attempt", extra={"attempt": attempt_count})
 
     detected_errors = json.dumps(
     state["detected_errors"],
@@ -269,7 +290,7 @@ Return ONLY valid JSON in this exact structure:
 
 {{
     "root_cause": "the most defensible root cause",
-    "error_category": "Infrastructure Error, Developer-Side Error, or DevOps-Side Error",
+    "error_category": "infra, devops, compilation, or needs_triage",
     "evidence": [
         "evidence from the detected errors"
     ],
@@ -281,13 +302,18 @@ Return ONLY valid JSON in this exact structure:
 Rules:
 - Use only information supported by the evidence.
 - Classify the root cause as exactly one of these categories:
-    - Infrastructure Error: an external Jenkins agent, server, network,
-        storage, cloud resource, or service availability/resource problem.
-    - Developer-Side Error: a defect in application source code, such as
-        compilation errors or failing code-level tests.
-    - DevOps-Side Error: a Jenkinsfile, pipeline, build/deployment automation,
-        credentials, permissions, toolchain, or environment configuration problem.
-- Set error_category to exactly one of the three category names in the JSON structure.
+    - infra: Jenkins agent/node offline or disconnected, executor or channel
+        failure, network/DNS, storage or disk space, out-of-memory kill, cloud
+        resource, or an external service being unavailable (including
+        Artifactory/registry 5xx or timeouts).
+    - devops: Jenkinsfile or pipeline script error, build/deploy automation,
+        credentials, permissions, missing tool or toolchain, or environment
+        configuration.
+    - compilation: application source code fails to compile or link
+        (compiler or linker errors in project source).
+    - needs_triage: failing tests, mixed or unclear causes, or evidence
+        insufficient to choose one of the above.
+- Set error_category to exactly one of: infra, devops, compilation, needs_triage.
 - Choose the category best supported by the root cause and evidence; do not
     classify based only on the fact that the failure occurred in Jenkins.
 - Do not invent missing information.
@@ -306,28 +332,31 @@ Rules:
 - Every evidence item must appear verbatim in the detected errors.
 """
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
+    root_cause = llm.complete_json(
+        prompt,
+        RootCauseResult
+    ).model_dump(mode="json")
 
-    root_cause = response.choices[0].message.content
-
-    root_cause = json.loads(root_cause)
+    proposed_evidence = root_cause.get("evidence", [])
 
     root_cause["evidence"] = validate_evidence(
-    root_cause.get("evidence", []),
-    state["parsed_log"]
+        proposed_evidence,
+        state["parsed_log"]
     )
 
-    print(
-    "Validated root cause evidence:",
-    root_cause["evidence"]
+    # Keep what was dropped so the validator rejects partly invented
+    # evidence instead of passing on the surviving items alone.
+    root_cause["rejected_evidence"] = [
+        item for item in proposed_evidence
+        if item not in root_cause["evidence"]
+    ]
+
+    logger.info(
+        "Root cause finished",
+        extra={
+            "evidence_count": len(root_cause["evidence"]),
+            "category": root_cause.get("error_category"),
+        }
     )
 
 
@@ -337,8 +366,6 @@ Rules:
     }
 
 def validator_node(state: State):
-    print("Validator received:", state["root_cause"])
-
     detected_errors = json.dumps(
         state["detected_errors"],
         indent=2
@@ -354,11 +381,11 @@ def validator_node(state: State):
         state["parsed_log"]
     )
 
-    print(
-        "Deterministic validation:",
-        deterministic_problems
+    logger.info(
+        "Deterministic validation",
+        extra={"problem_count": len(deterministic_problems)}
     )
-    
+
 
     prompt = f"""
 You are a Validation Agent for a Jenkins build failure analysis system.
@@ -409,19 +436,10 @@ Rules:
 - A recommended fix must not depend on information that is absent from the evidence.
 """
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
-
-    validation_result = response.choices[0].message.content
-
-    validation_result = json.loads(validation_result)
+    validation_result = llm.complete_json(
+        prompt,
+        ValidationVerdict
+    ).model_dump(mode="json")
 
     if deterministic_problems:
         validation_result["valid"] = False
@@ -440,6 +458,11 @@ Rules:
             + "; ".join(deterministic_problems)
         )
 
+    logger.info(
+        "Validator verdict",
+        extra={"valid": validation_result["valid"]}
+    )
+
     return {
         "validation_result": validation_result
     }
@@ -452,7 +475,7 @@ def validator_router(state: State):
     if validation["valid"]:
         return "end"
 
-    if attempt_count >= 3:
+    if attempt_count >= get_settings().max_validation_attempts:
         return "end"
 
     return "retry"
@@ -465,7 +488,14 @@ graph.add_node("root_cause", root_cause_node)
 graph.add_node("validator", validator_node)
 
 graph.add_edge(START, "parser")
-graph.add_edge("parser", "error_detector")
+graph.add_conditional_edges(
+    "parser",
+    parser_router,
+    {
+        "end": END,
+        "continue": "error_detector"
+    }
+)
 graph.add_edge("error_detector", "root_cause")
 graph.add_edge("root_cause", "validator")
 
@@ -480,59 +510,71 @@ graph.add_conditional_edges(
 
 app = graph.compile()    
 
-def analyze_log(log_content: str):
-    return app.invoke({
-        "log_content": log_content,
-        "parsed_log": "",
-        "parser_metadata": {},
-        "detected_errors": {},
-        "root_cause": {},
-        "validation_result": {},
-        "attempt_count": 0
-    })
+def analyze_log(log_content: str) -> dict:
+    """Run the analysis graph. Raises llm.LLMProviderError if the LLM is
+    unreachable or not configured; unusable LLM output degrades to an
+    unvalidated result instead of raising."""
 
-def build_analysis_response(result, filename):
-    detected_errors = result["detected_errors"]
-    root_cause = result["root_cause"]
+    try:
+        return app.invoke({
+            "log_content": redact(log_content),
+            "parsed_log": "",
+            "parser_metadata": {},
+            "detected_errors": {},
+            "root_cause": {},
+            "validation_result": {},
+            "attempt_count": 0
+        })
+    except llm.LLMOutputError as err:
+        logger.warning("LLM output unusable", extra={"error": str(err)})
+
+        return {
+            "parser_metadata": {},
+            "detected_errors": {},
+            "root_cause": {},
+            "validation_result": {
+                "valid": False,
+                "reason": f"LLM output invalid: {err}"
+            },
+            "attempt_count": 0
+        }
+
+def build_analysis_response(result: dict, filename: str) -> dict:
+    detected_errors = result.get("detected_errors") or {}
+    root_cause = result.get("root_cause") or {}
+    validation_result = result.get("validation_result") or {}
+
+    validated = validation_result.get("valid") is True
+    llm_category = root_cause.get("error_category")
+
+    # Only a validated analysis may carry an actionable category.
+    error_category = (
+        llm_category
+        if validated and llm_category
+        else ErrorCategory.NEEDS_TRIAGE.value
+    )
 
     return {
         "filename": filename,
-
-        "failure_summary": detected_errors.get(
-            "main_error",
-            "Unknown"
-        ),
-
-        "root_cause": root_cause.get(
-            "root_cause",
-            "Unknown"
-        ),
-
-        "error_category": root_cause["error_category"],
-
+        "failure_summary": detected_errors.get("main_error", "Unknown"),
+        "root_cause": root_cause.get("root_cause", "Unknown"),
+        "error_category": error_category,
+        "llm_category": llm_category,
+        "validated": validated,
+        "validation_reason": validation_result.get("reason", ""),
+        "attempts": result.get("attempt_count", 0),
         "affected_component": root_cause.get(
             "affected_component",
-            detected_errors.get(
-                "affected_component",
-                "Unknown"
-            )
+            detected_errors.get("affected_component", "Unknown")
         ),
-
-        "evidence": root_cause.get(
-            "evidence",
-            detected_errors.get(
-                "evidence",
-                []
-            )
+        "evidence": (
+            root_cause.get("evidence")
+            or detected_errors.get("evidence")
+            or []
         ),
-
         "recommended_fix": root_cause.get(
-    "recommended_fix",
-    "Not yet determined"
-),
-
-        "confidence": root_cause.get(
-            "confidence",
-            "unknown"
-        )
+            "recommended_fix",
+            "Not yet determined"
+        ),
+        "confidence": root_cause.get("confidence", "unknown"),
     }
