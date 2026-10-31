@@ -90,3 +90,20 @@ def test_unterminated_private_key_redacted_to_end():
 ])
 def test_non_secret_text_untouched(raw):
     assert redact(raw) == raw
+
+
+from utils.redaction import redact_mapping  # noqa: E402
+
+
+def test_secret_parameters_redacted():
+    out = redact_mapping({
+        "DEPLOY_PASSWORD": "hunter2",
+        "API_TOKEN": "x1",
+        "TARGET": "url https://u:p@h/x",
+        "BRANCH": "main",
+    })
+
+    assert out["DEPLOY_PASSWORD"] == "[REDACTED]"
+    assert out["API_TOKEN"] == "[REDACTED]"
+    assert "u:p@" not in out["TARGET"]
+    assert out["BRANCH"] == "main"

@@ -93,3 +93,19 @@ def redact(text: str) -> str:
         text = pattern.sub(replacement, text)
 
     return text
+
+
+_SECRET_KEY = re.compile(_SECRET_IDENTIFIER, re.IGNORECASE)
+
+
+def redact_mapping(values: dict[str, str]) -> dict[str, str]:
+    """Redact a name -> value mapping such as Jenkins build parameters.
+
+    Values of secret-looking names are replaced outright; all other values
+    still go through redact() for embedded credentials.
+    """
+
+    return {
+        name: REDACTED if _SECRET_KEY.fullmatch(name) else redact(value)
+        for name, value in values.items()
+    }
