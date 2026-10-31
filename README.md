@@ -15,12 +15,12 @@ It is being extended into an automated remediation system (re-run infra failures
 | Upload a console log in the browser or via API and get a classification | ✅ Available |
 | 4-class taxonomy with a `validated` flag (unvalidated → `needs_triage`) | ✅ Available |
 | Secret redaction before any LLM call | ✅ Available |
-| Jenkins webhook, background worker, review UI, labeling | 🚧 P1, in progress |
+| Jenkins webhook, background worker, review UI, labeling (**shadow mode**) | ✅ P1 — see §6 |
 | Automatic re-run of infra failures | ⏳ P2 |
 | Owner email for DevOps failures | ⏳ P3 |
 | Gerrit culprit exclusion + re-trigger for compilation failures | ⏳ P4 |
 
-The current app **only reads what you upload**. It does not connect to Jenkins, Gerrit or email, and it never triggers builds or votes.
+The app **never triggers builds, votes in Gerrit, or sends email**. The upload page only reads what you upload. The P1 worker reads from Jenkins with GET requests only and records the action it *would* take (shadow mode).
 
 ---
 
@@ -46,7 +46,17 @@ Create **`backend/.env`** (it is git-ignored; never commit it):
 GROQ_API_KEY=<your-groq-key>
 ```
 
-That is the only variable the current app needs. Other variables in the team's `.env` (`JENKINS_*`, `GERRIT_KEY`, `EMAIL_ID`) are for upcoming phases and are ignored for now. Never paste real values into chat, tickets or commits.
+That is all the **upload page** needs. The **P1 shadow pipeline** (§6) also needs the following; `.env` is always read from `backend/`, whatever directory you start from:
+
+```bash
+JENKINS_URL=https://<your-jenkins>/
+JENKINS_USERNAME=<service account>
+JENKINS_API_TOKEN=<API token — not the password>
+JENKINS_WEBHOOK_TOKEN=<random secret shared with Jenkins>
+EMAIL_ID=<test recipient shown on proposed DevOps notifications>
+```
+
+`GERRIT_KEY` is for a later phase and is ignored for now. Never paste real values into chat, tickets or commits.
 
 ---
 
@@ -146,7 +156,50 @@ Before upload, the app redacts tokens, passwords, credentialed URLs, API keys an
 
 ---
 
-## 6. Reading the result
+## 6. P1 shadow pipeline: webhook → worker → review UI
+
+**What it does:**
+- Failed builds arrive by webhook (or by backfill).
+- The worker reads each build from Jenkins (console tail, parameters, failing stage) **using GET requests only**.
+- It classifies the failure with deterministic rules plus the LLM. Any disagreement, unvalidated result or low confidence becomes `needs_triage`.
+- It records the remediation it *would* take.
+- Reviewers label each classification at `/ui/`, which builds per-category accuracy.
+
+**Start it** (VPN required for real Jenkins):
+
+```bash
+cd backend && . .venv/bin/activate
+python -m manage create-user <you> --role labeler   # once; prompts for a password
+uvicorn main:app --port 8000                         # terminal 1
+python -m worker                                     # terminal 2
+```
+
+With Docker, `docker compose up --build` also starts the `worker` service. It exits cleanly if the Jenkins settings are missing. Create the user with `docker compose run --rm backend python -m manage create-user <you> --role labeler`. The database lives in `backend/data/`.
+
+**Feed it failures**, either way:
+
+- **Backfill (no Jenkins changes needed):** `python -m backfill --job "folder/name" --count 20`
+- **Live webhook:** add the `post { failure { ... } }` snippet from `docs/integration/jenkins-failure-webhook.md` to the job.
+
+**Review:** open http://127.0.0.1:8000/ui/ and log in.
+- The default view is "Needs triage (unlabeled)".
+- Click an event to see the evidence, the redacted log excerpt, and the proposed action under **"Proposed (shadow — not executed)"**.
+- Mark each one **Correct** or **Incorrect** (with the correct category). Accuracy per category is shown at the top.
+
+**Roles:** `viewer` (read), `labeler` (read + label), `operator` (reserved for enabling auto mode in later phases).
+
+**Proposed actions** (recorded only):
+
+| Final category | Proposed action | Would be allowed when |
+|---|---|---|
+| `infra` | `rerun` (same parameters) | job matches `RERUN_JOB_ALLOWLIST` |
+| `devops` | `notify_owner` | `EMAIL_ID` is set |
+| `compilation` | `exclude_culprit` (Gerrit change from `GERRIT_*` build params) | the build has a Gerrit change number |
+| `needs_triage` | none | — |
+
+---
+
+## 7. Reading the result
 
 | Field | Meaning |
 |---|---|
@@ -167,7 +220,7 @@ Before upload, the app redacts tokens, passwords, credentialed URLs, API keys an
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
@@ -178,10 +231,14 @@ Before upload, the app redacts tokens, passwords, credentialed URLs, API keys an
 | `needs_triage` with `No error context found in log.` | The log has no error/failure lines; check you downloaded the failed build's console. |
 | Slow responses | Groq rate limiting; the client retries automatically. |
 | Jenkins hostname doesn't resolve | VPN not connected. |
+| Webhook returns `503` | `JENKINS_WEBHOOK_TOKEN` not set in `backend/.env`. |
+| Webhook returns `422` | `build_url` is not under `JENKINS_URL`. |
+| Event stuck in `queued` / ends `failed` | Check `last_error` on the event in `/ui/`; Jenkins unreachable or Groq unavailable. Retries back off 60 s, 120 s, then the event is marked failed. |
+| `/ui/` keeps asking for a password | Wrong credentials; reset with `python -m manage set-password <user>`. |
 
 ---
 
-## 8. Configuration reference
+## 9. Configuration reference
 
 Set in `backend/.env` or as environment variables.
 
@@ -195,10 +252,18 @@ Set in `backend/.env` or as environment variables.
 | `MAX_UPLOAD_BYTES` | `20000000` | Larger uploads return 413 |
 | `CORS_ORIGINS` | `["http://127.0.0.1:5500","http://localhost:5500"]` | JSON list |
 | `LOG_LEVEL` | `INFO` | JSON logs to stdout |
+| `DATABASE_URL` | `sqlite:///<backend>/data/remediation.db` | Event store (SQLAlchemy URL) |
+| `JENKINS_URL` | — | Jenkins base URL; all outbound Jenkins calls must stay under it |
+| `JENKINS_USERNAME` / `JENKINS_API_TOKEN` | — | Read-only REST access for the worker and backfill |
+| `JENKINS_WEBHOOK_TOKEN` | — | Shared webhook secret (`X-Webhook-Token`) |
+| `JENKINS_MAX_LOG_BYTES` | `5000000` | Console tail fetched per build |
+| `EMAIL_ID` | — | Test recipient on proposed DevOps notifications |
+| `RERUN_JOB_ALLOWLIST` | `[]` | JSON list of job patterns eligible for a re-run |
+| `WORKER_MAX_ATTEMPTS` / `WORKER_BACKOFF_SECONDS` / `WORKER_LEASE_SECONDS` | `3` / `60` / `600` | Retry and crash-recovery tuning |
 
 ---
 
-## 9. How it works
+## 10. How it works
 
 ```text
 log → redact secrets → parser (extract [Line N] error context)

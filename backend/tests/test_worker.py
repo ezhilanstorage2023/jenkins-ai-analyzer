@@ -101,3 +101,15 @@ def test_unusable_llm_output_still_completes_as_triage(fake_llm, queued_event, j
         assert event.status == "done"
         assert event.analysis.final_category == "needs_triage"
         assert event.action is None
+
+
+def test_main_exits_cleanly_when_jenkins_unconfigured(caplog, monkeypatch):
+    import worker
+
+    # configure_logging would replace pytest's capture handler.
+    monkeypatch.setattr(worker, "configure_logging", lambda level: None)
+    caplog.set_level("ERROR")
+
+    worker.main()  # must return, not raise or loop
+
+    assert "Jenkins is not configured" in caplog.text

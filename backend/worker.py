@@ -122,7 +122,13 @@ def run_once(jenkins: JenkinsClient, now: datetime | None = None) -> bool:
 def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
-    jenkins = jenkins_client_from_settings()
+
+    try:
+        jenkins = jenkins_client_from_settings()
+    except JenkinsError as err:
+        # Exit cleanly (no restart loop) on installs without Jenkins settings.
+        logger.error("Worker not started: %s", err)
+        return
 
     logger.info("Worker started")
 
