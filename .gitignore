@@ -20,6 +20,7 @@ Thumbs.db
 
 # Logs
 *.log
+!backend/tests/fixtures/logs/*.log
 
 # Python cache
 .pytest_cache/

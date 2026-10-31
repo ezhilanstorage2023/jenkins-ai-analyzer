@@ -1,0 +1,37 @@
+Triggered by Gerrit: https://gerrit.example.internal/c/acme/service/+/48213
+Running in Durability level: MAX_SURVIVABILITY
+[Pipeline] Start of Pipeline
+[Pipeline] node
+Running on agent-11 in /home/jenkins/workspace/acme-service_gerrit-verify
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Checkout)
+Fetching upstream changes from ssh://gerrit.example.internal:29418/acme/service
+Checking out Revision 9c0d1e2f3a4b (refs/changes/13/48213/2)
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Compile)
+[Pipeline] sh
++ ant compile
+Buildfile: /home/jenkins/workspace/acme-service_gerrit-verify/build.xml
+compile:
+    [javac] Compiling 214 source files to /home/jenkins/workspace/acme-service_gerrit-verify/build/classes
+    [javac] /src/com/acme/Foo.java:42: error: cannot find symbol
+    [javac]         ParseResult result = OrderParser.parseLegacy(payload);
+    [javac]                                         ^
+    [javac]   symbol:   method parseLegacy(String)
+    [javac]   location: class OrderParser
+    [javac] 1 error
+
+BUILD FAILED
+/home/jenkins/workspace/acme-service_gerrit-verify/build.xml:58: Compile failed; see the compiler error output for details.
+
+Total time: 21 seconds
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] }
+[Pipeline] // node
+[Pipeline] End of Pipeline
+ERROR: script returned exit code 1
+Finished: FAILURE

@@ -1,0 +1,35 @@
+Started by an SCM change
+Running in Durability level: MAX_SURVIVABILITY
+[Pipeline] Start of Pipeline
+[Pipeline] node
+Running on agent-07 in /home/jenkins/workspace/acme-service_main
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Checkout)
+[Pipeline] checkout
+The recommended git tool is: NONE
+Fetching changes from the remote Git repository
+Checking out Revision 4f2a9c1e7b3d (refs/remotes/origin/main)
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (Build)
+[Pipeline] sh
++ ./gradlew assemble --no-daemon
+> Task :compileJava
+> Task :processResources
+Cannot contact agent-07: java.lang.InterruptedException
+hudson.remoting.ChannelClosedException: Channel "hudson.remoting.Channel@1a2b:agent-07": Remote call on agent-07 failed. The channel is closing down or has closed down
+	at hudson.remoting.Channel.call(Channel.java:1001)
+	at hudson.Launcher$RemoteLauncher.kill(Launcher.java:1121)
+	at org.jenkinsci.plugins.workflow.steps.durable_task.DurableTaskStep$Execution.check(DurableTaskStep.java:612)
+Caused by: java.nio.channels.ClosedChannelException
+	at org.jenkinsci.remoting.protocol.NetworkLayer.onRecvClosed(NetworkLayer.java:155)
+Agent agent-07 was marked offline: Connection was broken
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] }
+[Pipeline] // node
+[Pipeline] End of Pipeline
+ERROR: Issue with creating launcher for agent agent-07. The agent is being disconnected
+Finished: FAILURE
