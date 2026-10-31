@@ -103,3 +103,31 @@ def queued_event():
         session.add(event)
         session.flush()
         return event.id
+
+
+@pytest.fixture
+def users():
+    from auth import hash_password
+    from store.models import User
+
+    with session_scope() as session:
+        for username, role in (
+            ("viewer1", "viewer"),
+            ("labeler1", "labeler"),
+            ("operator1", "operator"),
+        ):
+            session.add(User(
+                username=username,
+                password_hash=hash_password("pw"),
+                role=role,
+            ))
+
+
+@pytest.fixture
+def viewer(users):
+    return ("viewer1", "pw")
+
+
+@pytest.fixture
+def labeler(users):
+    return ("labeler1", "pw")
