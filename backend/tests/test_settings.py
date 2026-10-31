@@ -1,4 +1,10 @@
-from settings import get_settings
+from pathlib import Path
+
+import settings as settings_module
+from settings import Settings, get_settings
+
+# Captured at import, before the autouse fixture disables .env loading.
+ENV_FILE_DEFAULT = Settings.model_config["env_file"]
 
 
 def test_defaults():
@@ -17,3 +23,28 @@ def test_env_override(monkeypatch):
     assert s.groq_api_key.get_secret_value() == "gsk_test"
     assert "gsk_test" not in repr(s)
     assert s.max_upload_bytes == 100
+
+
+def test_env_file_anchored_to_backend_dir():
+    assert Path(ENV_FILE_DEFAULT) == Path(settings_module.__file__).parent / ".env"
+
+
+def test_email_id_alias_sets_owner_override(monkeypatch):
+    monkeypatch.setenv("EMAIL_ID", "owner@example.com")
+    get_settings.cache_clear()
+
+    assert get_settings().owner_email_override == "owner@example.com"
+
+
+def test_jenkins_base_url_gets_trailing_slash(monkeypatch):
+    monkeypatch.setenv("JENKINS_URL", "https://ci.example.com")
+    get_settings.cache_clear()
+
+    assert get_settings().jenkins_base_url == "https://ci.example.com/"
+
+
+def test_default_database_is_absolute_sqlite_path():
+    url = get_settings().database_url
+
+    assert url.startswith("sqlite:////")
+    assert url.endswith("/data/remediation.db")

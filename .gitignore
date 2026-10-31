@@ -34,3 +34,6 @@ build/
 
 # LibreOffice lock files
 .~lock.*#
+
+# Local remediation database
+backend/data/
