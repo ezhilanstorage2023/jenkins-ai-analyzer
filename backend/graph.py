@@ -1,4 +1,5 @@
 from utils.log_processor import extract_error_context
+from models import ErrorCategory
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
 from dotenv import load_dotenv
@@ -491,48 +492,42 @@ def analyze_log(log_content: str):
         "attempt_count": 0
     })
 
-def build_analysis_response(result, filename):
-    detected_errors = result["detected_errors"]
-    root_cause = result["root_cause"]
+def build_analysis_response(result: dict, filename: str) -> dict:
+    detected_errors = result.get("detected_errors") or {}
+    root_cause = result.get("root_cause") or {}
+    validation_result = result.get("validation_result") or {}
+
+    validated = validation_result.get("valid") is True
+    llm_category = root_cause.get("error_category")
+
+    # Only a validated analysis may carry an actionable category.
+    error_category = (
+        llm_category
+        if validated and llm_category
+        else ErrorCategory.NEEDS_TRIAGE.value
+    )
 
     return {
         "filename": filename,
-
-        "failure_summary": detected_errors.get(
-            "main_error",
-            "Unknown"
-        ),
-
-        "root_cause": root_cause.get(
-            "root_cause",
-            "Unknown"
-        ),
-
-        "error_category": root_cause["error_category"],
-
+        "failure_summary": detected_errors.get("main_error", "Unknown"),
+        "root_cause": root_cause.get("root_cause", "Unknown"),
+        "error_category": error_category,
+        "llm_category": llm_category,
+        "validated": validated,
+        "validation_reason": validation_result.get("reason", ""),
+        "attempts": result.get("attempt_count", 0),
         "affected_component": root_cause.get(
             "affected_component",
-            detected_errors.get(
-                "affected_component",
-                "Unknown"
-            )
+            detected_errors.get("affected_component", "Unknown")
         ),
-
-        "evidence": root_cause.get(
-            "evidence",
-            detected_errors.get(
-                "evidence",
-                []
-            )
+        "evidence": (
+            root_cause.get("evidence")
+            or detected_errors.get("evidence")
+            or []
         ),
-
         "recommended_fix": root_cause.get(
-    "recommended_fix",
-    "Not yet determined"
-),
-
-        "confidence": root_cause.get(
-            "confidence",
-            "unknown"
-        )
+            "recommended_fix",
+            "Not yet determined"
+        ),
+        "confidence": root_cause.get("confidence", "unknown"),
     }
