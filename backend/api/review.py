@@ -7,13 +7,37 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from auth import require_role
+from clients.jenkins import (
+    JenkinsError,
+    build_url_for,
+    jenkins_client_from_settings,
+)
 from models import ErrorCategory
+from settings import get_settings
 from store.db import get_session, utcnow
 from store.models import Analysis, Event, Label, User
 
 router = APIRouter(prefix="/api")
 
 _MAX_LIMIT = 200
+
+
+def get_jenkins():
+    """Request-scoped read-only Jenkins client; overridable in tests.
+
+    Always the live Jenkins (from settings) — no local/mock data path in
+    production; the fake is injected only via dependency override in tests.
+    """
+
+    try:
+        client = jenkins_client_from_settings()
+    except JenkinsError as err:
+        raise HTTPException(503, f"Jenkins is not configured: {err}")
+
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _time(value):
@@ -193,3 +217,113 @@ def accuracy(
         bucket["accuracy"] = round(bucket["correct"] / bucket["labeled"], 3)
 
     return totals
+
+
+@router.get("/jenkins/failed-builds")
+def failed_builds(
+    count: int = Query(20, ge=1, le=100),
+    user: User = Depends(require_role("viewer")),
+    session: Session = Depends(get_session),
+    jenkins=Depends(get_jenkins),
+):
+    """Failed builds of the configured jobs, read-only against Jenkins.
+
+    Each row carries any existing Event's id/status/final category, so the
+    UI can tell new builds apart from ones already queued or classified.
+    """
+
+    settings = get_settings()
+    controller_id = settings.jenkins_controller_id
+
+    if not settings.jenkins_jobs:
+        raise HTTPException(409, "No jobs configured (set JENKINS_JOBS).")
+
+    rows = []
+
+    for job in settings.jenkins_jobs:
+        try:
+            builds = jenkins.list_builds(job, count)
+        except JenkinsError as err:
+            raise HTTPException(503, f"Jenkins request failed: {err}")
+
+        failed = [b for b in builds if b.result == "FAILURE"]
+
+        if not failed:
+            continue
+
+        existing = {
+            event.build_number: event
+            for event in session.query(Event).filter(
+                Event.controller_id == controller_id,
+                Event.job == job,
+                Event.build_number.in_([b.number for b in failed]),
+            )
+        }
+
+        for build in failed:
+            event = existing.get(build.number)
+            analysis = event.analysis if event else None
+
+            rows.append({
+                "job": job,
+                "build_number": build.number,
+                "build_url": build_url_for(jenkins.base_url, job, build.number),
+                "result": build.result,
+                "timestamp": build.timestamp,
+                "event_id": event.id if event else None,
+                "event_status": event.status if event else None,
+                "final_category": analysis.final_category if analysis else None,
+            })
+
+    return rows
+
+
+class AnalyzeIn(BaseModel):
+    job: str
+    build_number: int = Field(ge=1)
+
+
+@router.post("/jenkins/analyze")
+def analyze_build(
+    body: AnalyzeIn,
+    user: User = Depends(require_role("operator")),
+    session: Session = Depends(get_session),
+):
+    """Enqueue one failed build for shadow classification by the worker.
+
+    Idempotent: an existing event for the build is returned unchanged.
+    Only configured jobs may be enqueued.
+    """
+
+    settings = get_settings()
+
+    if body.job not in settings.jenkins_jobs:
+        raise HTTPException(422, "Job is not in the configured job list.")
+
+    controller_id = settings.jenkins_controller_id
+
+    existing = session.query(Event).filter_by(
+        controller_id=controller_id,
+        job=body.job,
+        build_number=body.build_number,
+    ).one_or_none()
+
+    if existing is not None:
+        return {"event_id": existing.id, "status": existing.status}
+
+    now = utcnow()
+    event = Event(
+        controller_id=controller_id,
+        job=body.job,
+        build_number=body.build_number,
+        # Canonical URL from our configured base, never caller-supplied.
+        build_url=build_url_for(settings.jenkins_base_url, body.job, body.build_number),
+        result="FAILURE",
+        source="manual",
+        next_attempt_at=now,
+        received_at=now,
+    )
+    session.add(event)
+    session.commit()
+
+    return {"event_id": event.id, "status": event.status}

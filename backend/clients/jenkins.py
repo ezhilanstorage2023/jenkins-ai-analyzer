@@ -43,6 +43,8 @@ class BuildRef:
     number: int
     url: str
     result: str | None
+    # Epoch milliseconds, as Jenkins reports it; None if absent.
+    timestamp: int | None = None
 
 
 def job_path(job: str) -> str:
@@ -219,13 +221,16 @@ class JenkinsClient:
             for stage in stages
         ]
 
+    def close(self) -> None:
+        self._http.close()
+
     def job_url(self, job: str) -> str:
         return self.base_url + job_path(job)
 
     def list_builds(self, job: str, limit: int) -> list[BuildRef]:
         data = self._get_json(
             self.job_url(job) + "api/json",
-            {"tree": f"builds[number,url,result]{{0,{limit}}}"},
+            {"tree": f"builds[number,url,result,timestamp]{{0,{limit}}}"},
         )
 
         return [
@@ -233,6 +238,7 @@ class JenkinsClient:
                 number=build["number"],
                 url=build["url"],
                 result=build.get("result"),
+                timestamp=build.get("timestamp"),
             )
             for build in data.get("builds") or []
         ]

@@ -20,6 +20,29 @@
 <main>
     <section class="list">
         <div class="toolbar">
+            <label for="buildsCount">Live failed builds · last</label>
+            <input id="buildsCount" type="number" min="1" max="100" value="20">
+            <button id="loadBuilds" type="button">Refresh from Jenkins</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Job</th>
+                    <th>Build</th>
+                    <th>Result</th>
+                    <th>Failed (UTC)</th>
+                    <th>State</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="failedBuilds"></tbody>
+        </table>
+        <p id="buildsStatus" class="muted"></p>
+    </section>
+
+    <section class="list">
+        <div class="toolbar">
             <label for="filter">Show</label>
             <select id="filter">
                 <option value="triage">Needs triage (unlabeled)</option>

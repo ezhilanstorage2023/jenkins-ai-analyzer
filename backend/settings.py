@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # fnmatch patterns of jobs eligible for an infra re-run.
     rerun_job_allowlist: list[str] = []
 
+    # Job paths whose failed builds can be browsed and classified from the UI.
+    jenkins_jobs: list[str] = []
+
     worker_poll_seconds: float = 5.0
     worker_max_attempts: int = 3
     worker_lease_seconds: int = 600

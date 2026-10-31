@@ -102,7 +102,7 @@ def test_server_error_raises_jenkins_error():
 
 def test_list_builds_uses_job_path():
     client, fake = make({"/job/acme/job/build/api/json": (200, {"builds": [
-        {"number": 7, "url": BUILD, "result": "FAILURE"},
+        {"number": 7, "url": BUILD, "result": "FAILURE", "timestamp": 1700000000000},
         {"number": 6, "url": BASE + "job/acme/job/build/6/", "result": "SUCCESS"},
     ]})})
 
@@ -110,7 +110,10 @@ def test_list_builds_uses_job_path():
 
     assert fake.seen[-1].url.path == "/job/acme/job/build/api/json"
     assert "{0,2}" in fake.seen[-1].url.params["tree"]
+    assert "timestamp" in fake.seen[-1].url.params["tree"]
     assert [(r.number, r.result) for r in refs] == [(7, "FAILURE"), (6, "SUCCESS")]
+    assert refs[0].timestamp == 1700000000000
+    assert refs[1].timestamp is None
 
 
 def test_basic_auth_header_sent():

@@ -131,3 +131,8 @@ def viewer(users):
 @pytest.fixture
 def labeler(users):
     return ("labeler1", "pw")
+
+
+@pytest.fixture
+def operator(users):
+    return ("operator1", "pw")

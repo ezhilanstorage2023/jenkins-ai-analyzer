@@ -12,6 +12,9 @@ const FILTERS = {
 
 const filter = document.getElementById("filter");
 const eventsBody = document.getElementById("events");
+const buildsBody = document.getElementById("failedBuilds");
+const buildsStatus = document.getElementById("buildsStatus");
+const buildsCount = document.getElementById("buildsCount");
 const listStatus = document.getElementById("listStatus");
 const detail = document.getElementById("detail");
 const labelForm = document.getElementById("labelForm");
@@ -248,6 +251,124 @@ labelForm.addEventListener("submit", async (submitEvent) => {
 });
 
 
+function fmtTime(ms) {
+    // Jenkins reports epoch milliseconds; show UTC, matching the events table.
+    if (!ms) {
+        return "—";
+    }
+
+    return new Date(ms).toISOString().replace("T", " ").slice(0, 19);
+}
+
+
+function stateLabel(row) {
+    if (!row.event_id) {
+        return "—";
+    }
+
+    if (row.event_status === "done" && row.final_category) {
+        return "done · " + row.final_category;
+    }
+
+    return row.event_status || "queued";
+}
+
+
+function pollEvent(id, onUpdate) {
+    // Poll the worker's progress until the event settles, then refresh views.
+    const timer = setInterval(async () => {
+        try {
+            const data = await api("/api/events/" + id);
+            const status = data.event.status;
+            onUpdate(status, data.analysis && data.analysis.final_category);
+
+            if (status === "done" || status === "failed") {
+                clearInterval(timer);
+                await Promise.all([showDetail(id), loadEvents()]);
+            }
+        } catch (error) {
+            clearInterval(timer);
+            buildsStatus.textContent = "Error: " + error.message;
+        }
+    }, 2000);
+}
+
+
+async function classify(row, button, stateCell) {
+    button.disabled = true;
+    stateCell.textContent = "queued";
+
+    try {
+        const result = await api("/api/jenkins/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                job: row.job,
+                build_number: row.build_number,
+            }),
+        });
+
+        pollEvent(result.event_id, (status, category) => {
+            stateCell.textContent =
+                status === "done" && category ? "done · " + category : status;
+        });
+    } catch (error) {
+        button.disabled = false;
+        buildsStatus.textContent = "Error: " + error.message;
+    }
+}
+
+
+async function loadFailedBuilds() {
+    buildsStatus.textContent = "Fetching live failed builds from Jenkins…";
+    buildsBody.replaceChildren();
+
+    let rows;
+
+    try {
+        const count = Number(buildsCount.value) || 20;
+        rows = await api("/api/jenkins/failed-builds?count=" + count);
+    } catch (error) {
+        buildsStatus.textContent = "Error: " + error.message;
+        return;
+    }
+
+    for (const row of rows) {
+        const tr = document.createElement("tr");
+        const stateCell = el("td", stateLabel(row));
+
+        const actionCell = document.createElement("td");
+
+        if (row.event_id) {
+            actionCell.append(el("span", "enqueued", "muted"));
+        } else {
+            const button = el("button", "Classify");
+            button.type = "button";
+            button.addEventListener("click", () =>
+                classify(row, button, stateCell));
+            actionCell.append(button);
+        }
+
+        const buildCell = document.createElement("td");
+        buildCell.append(buildLink(row.build_url));
+
+        tr.append(
+            el("td", row.job),
+            buildCell,
+            el("td", row.result),
+            el("td", fmtTime(row.timestamp)),
+            stateCell,
+            actionCell,
+        );
+        buildsBody.append(tr);
+    }
+
+    buildsStatus.textContent = rows.length
+        ? `${rows.length} failed build(s)`
+        : "No failed builds.";
+}
+
+
 function refresh() {
     Promise.all([loadEvents(), loadAccuracy()]).catch((error) => {
         listStatus.textContent = "Error: " + error.message;
@@ -257,4 +378,5 @@ function refresh() {
 
 filter.addEventListener("change", refresh);
 document.getElementById("refresh").addEventListener("click", refresh);
+document.getElementById("loadBuilds").addEventListener("click", loadFailedBuilds);
 refresh();
