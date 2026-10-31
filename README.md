@@ -26,6 +26,11 @@ The app **never triggers builds, votes in Gerrit, or sends email**. The upload p
 
 ## 2. Prerequisites
 
+Commands are shown for **Linux/macOS (bash)** and **Windows (PowerShell)**. On Windows:
+- Use **PowerShell**, not `cmd.exe`.
+- Type `curl.exe`, not `curl`. In Windows PowerShell 5.1, `curl` is an alias for `Invoke-WebRequest`, which takes different arguments.
+- Install Python 3.12 from python.org, which gives you the `py` launcher, or install `uv`.
+
 - Git, and either **Docker + Docker Compose** (easiest) or **Python 3.12**.
 - A **Groq API key** (https://console.groq.com).
 - For testing with real builds: **corporate VPN** access to Jenkins, and your own Jenkins login or personal API token.
@@ -40,7 +45,15 @@ cd jenkins-ai-analyzer
 git checkout main && git pull
 ```
 
-Create **`backend/.env`** (it is git-ignored; never commit it):
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/vasan-rj/jenkins-ai-analyzer.git
+cd jenkins-ai-analyzer
+git checkout main; git pull
+```
+
+Create **`backend/.env`** (it is git-ignored; never commit it). On Windows you can open it with `notepad backend\.env`. Save it as plain text, with no `.txt` extension added:
 
 ```bash
 GROQ_API_KEY=<your-groq-key>
@@ -70,6 +83,8 @@ Pick **one** option.
 docker compose up --build
 ```
 
+The command is the same on Windows (PowerShell, with Docker Desktop running).
+
 - Backend API: http://127.0.0.1:8000
 - Upload page: http://127.0.0.1:5500
 
@@ -77,7 +92,7 @@ Stop with `Ctrl+C`, then `docker compose down`.
 
 ### Option B — Local Python
 
-Terminal 1, the backend. **Start it from inside `backend/`** so it finds `backend/.env`:
+Terminal 1, the backend. Run it from inside `backend/`, where the Python modules live. `backend/.env` is found automatically:
 
 ```bash
 cd backend
@@ -87,10 +102,33 @@ pip install -r requirements.txt   # with uv: uv pip install -r requirements.txt
 uvicorn main:app --port 8000
 ```
 
+Windows (PowerShell):
+
+```powershell
+cd backend
+py -3.12 -m venv .venv            # or: uv venv --python 3.12 .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt   # with uv: uv pip install -r requirements.txt
+uvicorn main:app --port 8000
+```
+
+If activation fails with "running scripts is disabled on this system", allow scripts for the current window only, then activate again:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
 Terminal 2, the frontend, from the repo root:
 
 ```bash
 python3 -m http.server 5500 --directory frontend
+```
+
+Windows (PowerShell):
+
+```powershell
+py -3.12 -m http.server 5500 --directory frontend
 ```
 
 Open http://127.0.0.1:5500. The page must be served on port **5500**; the API only accepts browser requests from that origin.
@@ -106,10 +144,25 @@ curl http://127.0.0.1:8000/
 # {"message":"Jenkins AI Analyzer API is running"}
 ```
 
+Windows (PowerShell):
+
+```powershell
+curl.exe http://127.0.0.1:8000/
+# or: Invoke-RestMethod http://127.0.0.1:8000/
+```
+
 ### Step 2 — Automated tests (no API key or VPN needed)
 
 ```bash
 cd backend && . .venv/bin/activate
+pytest tests -q
+```
+
+Windows (PowerShell):
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
 pytest tests -q
 ```
 
@@ -121,6 +174,12 @@ Upload each file from `backend/tests/fixtures/logs/` on the upload page, or use 
 
 ```bash
 curl -s -F "file=@backend/tests/fixtures/logs/infra_agent_offline.log" http://127.0.0.1:8000/analyze-log
+```
+
+Windows (PowerShell, from the repo root):
+
+```powershell
+curl.exe -s -F "file=@backend/tests/fixtures/logs/infra_agent_offline.log" http://127.0.0.1:8000/analyze-log
 ```
 
 | Sample file | Expected `error_category` | Expected `validated` |
@@ -142,8 +201,14 @@ Each analysis makes about 3 LLM calls and usually takes 5–30 s. Groq rate limi
    curl -fsS -u "<your-user>:<your-api-token>" "<build URL>consoleText" -o myjob-1234.log
    ```
 
+   Windows (PowerShell):
+
+   ```powershell
+   curl.exe -fsS -u "<your-user>:<your-api-token>" "<build URL>consoleText" -o myjob-1234.log
+   ```
+
    Use your personal account for manual downloads, not the team service account.
-4. Upload the file on the upload page (or `curl -F "file=@myjob-1234.log" ...` as in Step 3).
+4. Upload the file on the upload page (or `curl -F "file=@myjob-1234.log" ...` as in Step 3; `curl.exe` on Windows).
 5. Record the result in the table below and share it with the team. These results become the evaluation set for later phases.
 
 Aim for a spread: a few agent/network failures, a few credential or pipeline-script failures, a few compiler errors, and a few test failures.
@@ -174,11 +239,21 @@ uvicorn main:app --port 8000                         # terminal 1
 python -m worker                                     # terminal 2
 ```
 
+Windows (PowerShell). Run `cd backend` and activate the venv in **each** terminal:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m manage create-user <you> --role labeler   # once; prompts for a password
+uvicorn main:app --port 8000                         # terminal 1
+python -m worker                                     # terminal 2
+```
+
 With Docker, `docker compose up --build` also starts the `worker` service. It exits cleanly if the Jenkins settings are missing. Create the user with `docker compose run --rm backend python -m manage create-user <you> --role labeler`. The database lives in `backend/data/`.
 
 **Feed it failures**, either way:
 
-- **Backfill (no Jenkins changes needed):** `python -m backfill --job "folder/name" --count 20`
+- **Backfill (no Jenkins changes needed):** `python -m backfill --job "folder/name" --count 20`. The command is the same in PowerShell, with the venv active.
 - **Live webhook:** add the `post { failure { ... } }` snippet from `docs/integration/jenkins-failure-webhook.md` to the job.
 
 **Review:** open http://127.0.0.1:8000/ui/ and log in.
@@ -224,13 +299,16 @@ With Docker, `docker compose up --build` also starts the `worker` service. It ex
 
 | Symptom | Cause / fix |
 |---|---|
-| `503 LLM is not configured (GROQ_API_KEY missing)` | `backend/.env` is missing or has no key, or the backend was started outside `backend/` (Option B). |
+| `503 LLM is not configured (GROQ_API_KEY missing)` | `backend/.env` is missing or has no key. On Windows, check that Notepad didn't save it as `.env.txt` (`dir backend` shows the real name). |
 | `503 LLM provider request failed` | Groq is unreachable or rejected the key. Check the key and your internet access. |
 | `413 Log file exceeds ... bytes` | The log is over 20 MB. Trim it to the failing part, or raise `MAX_UPLOAD_BYTES`. |
 | Upload page shows `Failed to fetch` | Backend not running on :8000, or the page isn't served on :5500. |
 | `needs_triage` with `No error context found in log.` | The log has no error/failure lines; check you downloaded the failed build's console. |
 | Slow responses | Groq rate limiting; the client retries automatically. |
 | Jenkins hostname doesn't resolve | VPN not connected. |
+| Windows: `curl` errors such as "A parameter cannot be found" | Use `curl.exe`; plain `curl` is PowerShell's `Invoke-WebRequest`. |
+| Windows: `Activate.ps1 cannot be loaded` | Run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that window first. |
+| Windows: `py -3.12` not found | Install Python 3.12 from python.org (it includes the `py` launcher), or use `uv venv --python 3.12 .venv`. |
 | Webhook returns `503` | `JENKINS_WEBHOOK_TOKEN` not set in `backend/.env`. |
 | Webhook returns `422` | `build_url` is not under `JENKINS_URL`. |
 | Event stuck in `queued` / ends `failed` | Check `last_error` on the event in `/ui/`; Jenkins unreachable or Groq unavailable. Retries back off 60 s, 120 s, then the event is marked failed. |

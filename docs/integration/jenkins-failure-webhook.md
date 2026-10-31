@@ -107,4 +107,13 @@ python -m backfill --job "folder/name" --count 20
 python -m worker        # Ctrl+C once the queue is drained
 ```
 
+Windows (PowerShell):
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m backfill --job "folder/name" --count 20
+python -m worker        # Ctrl+C once the queue is drained
+```
+
 Then review the results at `/ui/`.
