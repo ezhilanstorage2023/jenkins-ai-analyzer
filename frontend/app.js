@@ -1,3 +1,12 @@
+const API_BASE = window.API_BASE || "http://127.0.0.1:8000";
+
+const CATEGORY_LABELS = {
+    infra: "Infrastructure",
+    devops: "DevOps",
+    compilation: "Compilation",
+    needs_triage: "Needs triage",
+};
+
 const fileInput = document.getElementById("logFile");
 const analyzeButton = document.getElementById("analyzeButton");
 const status = document.getElementById("status");
@@ -34,7 +43,7 @@ analyzeButton.addEventListener("click", async () => {
     try {
 
         const response = await fetch(
-            "http://127.0.0.1:8000/analyze-log",
+            API_BASE + "/analyze-log",
             {
                 method: "POST",
                 body: formData
@@ -76,7 +85,18 @@ function displayResult(data) {
         .textContent = data.failure_summary;
 
     document.getElementById("errorCategory")
-        .textContent = data.error_category;
+        .textContent =
+            CATEGORY_LABELS[data.error_category] || data.error_category;
+
+    const validated = document.getElementById("validated");
+
+    validated.textContent =
+        data.validated ? "Validated" : "Not validated";
+
+    validated.classList.toggle("not-validated", !data.validated);
+
+    document.getElementById("validationReason")
+        .textContent = data.validated ? "" : data.validation_reason;
 
     document.getElementById("rootCause")
         .textContent = data.root_cause;
@@ -89,6 +109,9 @@ function displayResult(data) {
 
     document.getElementById("confidence")
         .textContent = data.confidence;
+
+    document.getElementById("attempts")
+        .textContent = "Attempts: " + data.attempts;
 
 
     const evidenceList =
