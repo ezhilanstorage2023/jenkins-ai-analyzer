@@ -1,0 +1,76 @@
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #f4f6f9;
+    color: #1f2937;
+}
+
+header { padding: 20px 28px 8px; }
+h1 { margin: 0 0 4px; font-size: 22px; }
+h2 { font-size: 18px; margin-top: 0; }
+h3 { font-size: 14px; margin: 18px 0 6px; color: #374151; }
+.subtitle, .muted { color: #6b7280; font-size: 13px; }
+
+main {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 20px;
+    padding: 8px 28px 28px;
+}
+
+@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+
+.list, .detail {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+}
+
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eef0f3; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr.selected { background: #eef4ff; }
+
+.accuracy { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.cat { font-weight: 600; }
+.cat-needs_triage { color: #b45309; }
+.cat-infra { color: #1d4ed8; }
+.cat-devops { color: #7c3aed; }
+.cat-compilation { color: #b91c1c; }
+
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; }
+dt { color: #6b7280; }
+dd { margin: 0; word-break: break-word; }
+
+pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre-wrap;
+}
+
+form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+textarea { width: 100%; min-height: 60px; font: inherit; }
+button { padding: 6px 12px; cursor: pointer; }
+
+.hidden { display: none; }
+.allowed { color: #166534; font-weight: 600; }
+.denied { color: #991b1b; font-weight: 600; }

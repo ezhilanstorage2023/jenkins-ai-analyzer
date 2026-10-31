@@ -145,3 +145,33 @@ def test_label_upsert_and_accuracy(seeded, labeler):
 
 def test_limit_is_capped(seeded, viewer):
     assert client.get("/api/events?limit=1000", auth=viewer).status_code == 200
+
+
+from pathlib import Path  # noqa: E402
+
+STATIC = Path(main.__file__).parent / "static" / "review"
+
+
+def test_ui_requires_auth():
+    assert client.get("/ui/").status_code == 401
+
+
+def test_ui_serves_whitelisted_files_only(viewer):
+    index = client.get("/ui/", auth=viewer)
+
+    assert index.status_code == 200
+    assert "text/html" in index.headers["content-type"]
+    assert client.get("/ui/review.js", auth=viewer).status_code == 200
+    assert client.get("/ui/review.css", auth=viewer).status_code == 200
+    assert client.get("/ui/..%2Fsettings.py", auth=viewer).status_code == 404
+    assert client.get("/ui/other.html", auth=viewer).status_code == 404
+
+
+def test_ui_never_uses_innerhtml():
+    assert "innerHTML" not in (STATIC / "review.js").read_text()
+
+
+def test_ui_labels_actions_as_shadow():
+    page = (STATIC / "index.html").read_text() + (STATIC / "review.js").read_text()
+
+    assert "Proposed (shadow — not executed)" in page
