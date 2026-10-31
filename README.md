@@ -57,7 +57,8 @@ The application uses **FastAPI**, **LangGraph**, and **Groq LLMs**, with a light
                   Valid         Invalid
                     |             |
                     v             v
-                   END       Retry Root Cause```
+                   END       Retry Root Cause
+```
 
 The graph ends early, without calling the LLM, when the log contains no error context. Validation is retried up to `MAX_VALIDATION_ATTEMPTS` times.
 

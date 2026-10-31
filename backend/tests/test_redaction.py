@@ -38,3 +38,55 @@ def test_compiler_text_untouched():
     )
 
     assert redact(raw) == raw
+
+
+@pytest.mark.parametrize("raw", [
+    "+ ./deploy.sh --password=\n[ERROR] deploy failed: 401",
+    "secret='x\nERROR: don't do that",
+    'token="\na\nb\nc',
+    "Authorization: Bearer\nERROR next line",
+    '{"token": "\n"}',
+])
+def test_redaction_never_changes_line_count(raw):
+    out = redact(raw)
+
+    assert out.count("\n") == raw.count("\n")
+
+    if "ERROR" in raw:
+        assert "ERROR" in out
+
+
+@pytest.mark.parametrize("raw, secret", [
+    ("GROQ_API_KEY=abc123secret", "abc123secret"),
+    ("DB_PASSWORD=hunter2", "hunter2"),
+    ("GITHUB_TOKEN=tok999", "tok999"),
+    ("aws_secret_access_key = wJalrXUtnFEMI", "wJalrXUtnFEMI"),
+    ("curl -H 'Bearer eyJhbGciOi.payload.sig9'", "eyJhbGciOi.payload.sig9"),
+    ("  password: hunter2", "hunter2"),
+    ("mysql --password hunter2 -u root", "hunter2"),
+    ('{"access_token": "at-1"}', "at-1"),
+    ('{"client_secret": "cs-2"}', "cs-2"),
+    ('{"refresh_token": "rt-3"}', "rt-3"),
+    ("github_pat_" + "A" * 40, "github_pat_" + "A" * 40),
+    ("//registry.npmjs.org/:_authToken=npm_abc123", "npm_abc123"),
+])
+def test_redacts_common_secret_forms(raw, secret):
+    assert secret not in redact(raw)
+
+
+def test_unterminated_private_key_redacted_to_end():
+    raw = "start\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3Blbn\nmore"
+    out = redact(raw)
+
+    assert "b3Blbn" not in out and "more" not in out
+    assert out.count("\n") == raw.count("\n")
+    assert out.startswith("start\n")
+
+
+@pytest.mark.parametrize("raw", [
+    "error: expected token: ';' before '}'",
+    "Bearer token required for this endpoint",
+    "WARNING: token: deprecated syntax",
+])
+def test_non_secret_text_untouched(raw):
+    assert redact(raw) == raw

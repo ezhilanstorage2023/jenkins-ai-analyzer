@@ -83,6 +83,26 @@ def parser_node(state: State):
                 + block_length
             )
 
+        # The latest block alone exceeds the limit: keep its tail,
+        # cut on line boundaries so "[Line N]" prefixes stay intact.
+        if not selected_blocks:
+            block_lines = blocks[-1].splitlines()
+            tail = []
+            tail_length = 0
+
+            for line in reversed(block_lines):
+                if tail_length + len(line) + 1 > max_characters:
+                    break
+
+                tail.append(line)
+                tail_length += len(line) + 1
+
+            if not tail:
+                tail = [block_lines[-1][:max_characters]]
+
+            tail.reverse()
+            selected_blocks.append("\n".join(tail))
+
         # Restore chronological order
         selected_blocks.reverse()
 
@@ -155,8 +175,9 @@ def validate_analysis(result, parsed_log):
             "Root cause has no supporting evidence."
         )
 
-    # 2. Every evidence item must exist exactly in the parsed log
-    for item in evidence:
+    # 2. Every evidence item must exist exactly in the parsed log,
+    #    including items already filtered out by validate_evidence
+    for item in evidence + result.get("rejected_evidence", []):
         if item not in parsed_log:
             problems.append(
                 f"Evidence not found in parsed log: {item}"
@@ -316,10 +337,19 @@ Rules:
         RootCauseResult
     ).model_dump(mode="json")
 
+    proposed_evidence = root_cause.get("evidence", [])
+
     root_cause["evidence"] = validate_evidence(
-    root_cause.get("evidence", []),
-    state["parsed_log"]
+        proposed_evidence,
+        state["parsed_log"]
     )
+
+    # Keep what was dropped so the validator rejects partly invented
+    # evidence instead of passing on the surviving items alone.
+    root_cause["rejected_evidence"] = [
+        item for item in proposed_evidence
+        if item not in root_cause["evidence"]
+    ]
 
     logger.info(
         "Root cause finished",

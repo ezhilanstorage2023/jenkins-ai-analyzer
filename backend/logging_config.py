@@ -36,3 +36,8 @@ def configure_logging(level: str) -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level.upper())
+
+    # At DEBUG these SDKs log full request options, i.e. the prompt with
+    # log text. Never let them go below INFO.
+    for name in ("groq", "httpx", "httpcore"):
+        logging.getLogger(name).setLevel(max(root.level, logging.INFO))

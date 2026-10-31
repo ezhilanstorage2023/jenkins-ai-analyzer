@@ -74,3 +74,39 @@ def test_secrets_never_reach_llm_prompt(fake_llm, caplog):
 
     assert all("SECRETTOKEN123" not in str(call["messages"]) for call in fake.calls)
     assert "SECRETTOKEN123" not in caplog.text
+
+
+def test_oversized_single_error_block_is_truncated_not_dropped(fake_llm):
+    lines = ["[INFO] BUILD START"] + [
+        f"[ERROR] /src/com/acme/A{i}.java:[10,5] cannot find symbol"
+        for i in range(150)
+    ]
+    log = "\n".join(lines)
+    last = "[Line 151] [ERROR] /src/com/acme/A149.java:[10,5] cannot find symbol"
+    fake = fake_llm([
+        detected_json([last]),
+        root_cause_json("compilation", [last]),
+        verdict_json(True),
+    ])
+
+    response = build_analysis_response(analyze_log(log), "b.log")
+
+    assert response["validation_reason"] != "No error context found in log."
+    assert response["error_category"] == "compilation"
+    assert len(fake.calls) == 3
+
+    prompt = fake.calls[0]["messages"][0]["content"]
+    assert last in prompt
+
+
+def test_partly_invented_evidence_fails_validation(fake_llm):
+    mixed = root_cause_json(
+        "compilation",
+        [EVID, "[Line 2] Change 12345 by alice introduced the bug"]
+    )
+    fake_llm([detected_json([EVID])] + [mixed, verdict_json(True)] * 3)
+
+    response = build_analysis_response(analyze_log(LOG), "b.log")
+
+    assert response["validated"] is False
+    assert response["error_category"] == "needs_triage"
