@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
-from api import webhooks
+from api import review, webhooks
 from graph import analyze_log, build_analysis_response
 from llm import LLMProviderError, LLMUnavailableError
 from logging_config import configure_logging
@@ -23,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(webhooks.router)
+app.include_router(review.router)
 
 
 @app.get("/")
