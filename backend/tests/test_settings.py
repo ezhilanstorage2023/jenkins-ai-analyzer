@@ -43,7 +43,11 @@ def test_jenkins_base_url_gets_trailing_slash(monkeypatch):
     assert get_settings().jenkins_base_url == "https://ci.example.com/"
 
 
-def test_default_database_is_absolute_sqlite_path():
+def test_default_database_is_absolute_sqlite_path(monkeypatch):
+    # conftest points DATABASE_URL at in-memory SQLite; check the default.
+    monkeypatch.delenv("DATABASE_URL")
+    get_settings.cache_clear()
+
     url = get_settings().database_url
 
     assert url.startswith("sqlite:////")
