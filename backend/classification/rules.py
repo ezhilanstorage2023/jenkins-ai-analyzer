@@ -3,10 +3,15 @@
 import re
 from dataclasses import dataclass
 
-RULES_VERSION = "2026-10-31.1"
+RULES_VERSION = "2026-10-31.3"
 
 # Compiler errors only count when the failing stage looks like a build.
 _BUILD_STAGE = re.compile(r"compil|build|make|assembl", re.IGNORECASE)
+
+# Shell xtrace ("+ cmd", "++ cmd", optionally after a Jenkins timestamp) echoes
+# the command being run, never its output, so a signature in it is not a
+# failure (e.g. `++ egrep 'error:|Connection refused'`). Anchored: linear.
+_XTRACE = re.compile(r"^\s*(?:\[[^\]\n]{0,40}\]\s*)?\+{1,4}\s")
 
 
 @dataclass(frozen=True)
@@ -27,6 +32,14 @@ RULES = [
     _rule("infra.agent_offline", "infra",
           r"agent .* (was marked offline|went offline|is offline)"
           r"|Cannot contact [\w.-]+:"),
+    # Jenkins' own wording when no executor can take the build or the agent
+    # does not return after a restart.
+    _rule("infra.agent_timeout", "infra",
+          r"Timeout waiting for agent to come back"),
+    _rule("infra.nodes_offline", "infra",
+          r"All nodes of label .{1,80} are offline"),
+    _rule("infra.controller_restart", "infra",
+          r"cannot be resumed after a controller restart"),
     _rule("infra.disk_full", "infra", r"No space left on device"),
     _rule("infra.oom", "infra",
           r"OOMKilled|Out of memory: Killed process|java\.lang\.OutOfMemoryError"),
@@ -47,7 +60,9 @@ RULES = [
           # No leading \S+ (quadratic on long tokens); the extension anchors it.
           r"\.(java|kt|scala|c|cc|cpp|cxx|h|hpp|go|cs|ts|rs):\d+(:\d+)?:?\s+(fatal )?error"
           r"|error: cannot find symbol|undefined reference to"
-          r"|COMPILATION ERROR|Compilation failed"),
+          # Maven/Gradle markers are case-sensitive: prose such as a commit
+          # message ("fix for compilation error") must not match.
+          r"|(?-i:\[ERROR\] COMPILATION ERROR|Compilation failed; see)"),
     _rule("tests.failures", "needs_triage",
           r"Tests run: \d+, Failures: [1-9]|There (were|are) test failures"
           r"|FAILED: \S*Test"),
@@ -67,6 +82,9 @@ def evaluate_rules(log: str, failing_stage: str | None) -> list[RuleMatch]:
             continue
 
         for number, line in enumerate(lines, start=1):
+            if _XTRACE.match(line):
+                continue
+
             if pattern.search(line):
                 matches.append(RuleMatch(rule_id, category, number, line))
                 break

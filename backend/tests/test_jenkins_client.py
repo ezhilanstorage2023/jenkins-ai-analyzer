@@ -169,3 +169,78 @@ def test_build_url_for_encodes_folders():
     assert build_url_for(BASE, "repo/feature%2Fx", 1) == (
         "https://ci.example.com/job/repo/job/feature%252Fx/1/"
     )
+
+
+# ---- list_jobs ------------------------------------------------------------
+
+def _jobs_client(body, status=200):
+    fake = FakeJenkins({"/api/json": (status, body)})
+
+    return JenkinsClient(
+        "https://ci.example.com", "svc", "tok",
+        timeout=5, max_log_bytes=1000, transport=fake.transport,
+    ), fake
+
+
+def _job(name, result="FAILURE", number=3, color="red", ts=1000):
+    last = None if result is None else {"number": number, "result": result, "timestamp": ts}
+    return {"fullName": name, "color": color, "lastCompletedBuild": last}
+
+
+def test_list_jobs_flattens_folders_and_reads_last_build():
+    body = {"jobs": [
+        _job("top"),
+        {"fullName": "team", "jobs": [
+            _job("team/a"),
+            {"fullName": "team/sub", "jobs": [_job("team/sub/b", result="SUCCESS", color="blue")]},
+        ]},
+    ]}
+    client, _ = _jobs_client(body)
+
+    jobs = {j.full_name: j for j in client.list_jobs()}
+
+    assert set(jobs) == {"top", "team/a", "team/sub/b"}  # folders are not jobs
+    assert (jobs["top"].last_number, jobs["top"].last_result, jobs["top"].last_timestamp) == (
+        3, "FAILURE", 1000)
+    assert jobs["team/sub/b"].last_result == "SUCCESS"
+
+
+def test_list_jobs_tolerates_missing_fields():
+    body = {"jobs": [
+        {"fullName": "never-built", "color": "notbuilt"},
+        {"fullName": "no-color", "lastCompletedBuild": {"number": 1, "result": "FAILURE"}},
+        {"color": "red"},                     # no name: skipped
+        {"fullName": "off", "color": "disabled", "lastCompletedBuild": None},
+    ]}
+    client, _ = _jobs_client(body)
+
+    jobs = {j.full_name: j for j in client.list_jobs()}
+
+    assert set(jobs) == {"never-built", "no-color", "off"}
+    assert jobs["never-built"].last_result is None
+    assert jobs["no-color"].last_timestamp is None and jobs["no-color"].disabled is False
+    assert jobs["off"].disabled is True
+
+
+def test_list_jobs_empty_and_null_jobs():
+    assert _jobs_client({"jobs": []})[0].list_jobs() == []
+    assert _jobs_client({})[0].list_jobs() == []
+
+
+def test_list_jobs_sends_one_get_with_a_nested_tree():
+    client, fake = _jobs_client({"jobs": []})
+
+    client.list_jobs()
+
+    assert len(fake.seen) == 1 and fake.seen[0].method == "GET"
+    tree = fake.seen[0].url.params["tree"]
+    assert "lastCompletedBuild[number,result,timestamp]" in tree
+    assert tree.count("jobs[") == 4  # root + three folder levels
+
+
+@pytest.mark.parametrize("status, body", [(503, b"down"), (302, b""), (200, b"<html>login</html>")])
+def test_list_jobs_errors_are_jenkins_errors(status, body):
+    client, _ = _jobs_client(body, status=status)
+
+    with pytest.raises(JenkinsError):
+        client.list_jobs()

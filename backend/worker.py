@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from clients.jenkins import JenkinsClient, JenkinsError, jenkins_client_from_settings
 from llm import LLMError
 from logging_config import configure_logging
+import executor
+import mailer
 from pipeline import StaleClaimError, process_event
 from settings import get_settings
 from store.db import session_scope, utcnow
@@ -187,10 +189,38 @@ def main() -> None:
         logger.error("Worker not started: %s", err)
         return
 
-    logger.info("Worker started")
+    # Writes to Jenkins exist only in "auto" mode; otherwise the write-capable
+    # client is never even built.
+    writer = None
+
+    if settings.mode_infra == "auto":
+        try:
+            writer = jenkins_client_from_settings(write=True)
+        except JenkinsError as err:
+            logger.error("Executor disabled: %s", err)
+
+    # The mail sender exists only in MODE_DEVOPS=auto (settings already refused
+    # auto without FROM_EMAIL_ID / SMTP_PASSWORD).
+    sender = mailer.SmtpSender(settings) if settings.mode_devops == "auto" else None
+
+    logger.info(
+        "Worker started",
+        extra={"executor": writer is not None, "mailer": sender is not None},
+    )
 
     while True:
-        if not run_once(jenkins):
+        busy = run_once(jenkins)
+
+        if writer is not None:
+            busy = executor.run_once(writer) or busy
+
+        if sender is not None:
+            busy = mailer.run_once(sender) or busy
+
+        # Read-only: records how the rebuilds we triggered ended.
+        busy = executor.track_outcomes(jenkins) or busy
+
+        if not busy:
             time.sleep(settings.worker_poll_seconds)
 
 

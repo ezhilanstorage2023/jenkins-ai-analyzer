@@ -122,11 +122,13 @@ def test_ordinary_parameter_names_kept():
     assert redact_mapping(params) == params
 
 
+# Short ids: pytest puts the test id in an env var, and Windows caps an
+# environment variable at 32,767 characters (a 40,000-char id breaks teardown).
 @pytest.mark.parametrize("raw", [
     "-" * 5000,
     "a-" * 20000,
     "x" * 40000,
-])
+], ids=["dashes", "a-dash", "x-run"])
 def test_redaction_is_fast_on_long_lines(raw):
     import time
 

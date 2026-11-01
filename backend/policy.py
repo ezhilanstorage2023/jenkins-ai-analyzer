@@ -33,6 +33,9 @@ def propose_action(
     settings = get_settings()
 
     if final_category == "infra":
+        if settings.mode_infra == "off":
+            return None
+
         allowed = any(
             fnmatch(job, pattern) for pattern in settings.rerun_job_allowlist
         )
@@ -51,6 +54,9 @@ def propose_action(
         )
 
     if final_category == "devops":
+        if settings.mode_devops == "off":
+            return None
+
         recipient = settings.owner_email_override
 
         return _proposal(

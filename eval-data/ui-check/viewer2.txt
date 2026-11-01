@@ -1,0 +1,12 @@
+{
+  "who": "ui-viewer · viewer",
+  "rows": 50,
+  "pageInfo": "1–50 of 61 failing jobs",
+  "classifyButtons": 0,
+  "selectAllDisabled": true,
+  "firstRow": " gen3_mid0_8inch_ev_tagging #479 5 min ago not classified ",
+  "pageInfoAfterSearch": "1–11 of 11 failing jobs",
+  "allMatchSearch": true,
+  "pageInfoAnyAge": "1–18 of 18 failing jobs",
+  "pageProblems": []
+}

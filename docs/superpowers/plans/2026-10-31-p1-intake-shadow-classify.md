@@ -80,7 +80,7 @@
   - `model_config.env_file = Path(__file__).parent / ".env"`
   - `Settings.jenkins_base_url` property: `jenkins_url` with a guaranteed trailing slash, or `None`.
 
-- [ ] **Step 1: Failing tests** (append to `tests/test_settings.py`)
+- [x] **Step 1: Failing tests** (append to `tests/test_settings.py`)
 
 ```python
 from pathlib import Path
@@ -106,10 +106,10 @@ def test_default_database_is_absolute_sqlite_path():
 
 Note: the conftest autouse fixture sets `env_file` to `None` per test. `test_env_file_anchored_to_backend_dir` must therefore read the class default before the fixture patches it: capture it at module import as `ENV_FILE_DEFAULT = Settings.model_config["env_file"]` and assert on that.
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_settings.py -q` → assertion and attribute errors.
-- [ ] **Step 3: Implement** the fields per Interfaces. Pin `sqlalchemy` to the version `uv pip install sqlalchemy` resolves. Add `backend/data/` to `.gitignore`.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass.
-- [ ] **Step 5: Commit** — `git add backend/settings.py backend/tests/test_settings.py backend/requirements.txt .gitignore && git commit -m "feat: P1 settings (database, jenkins, worker, owner override)"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_settings.py -q` → assertion and attribute errors.
+- [x] **Step 3: Implement** the fields per Interfaces. Pin `sqlalchemy` to the version `uv pip install sqlalchemy` resolves. Add `backend/data/` to `.gitignore`.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass.
+- [x] **Step 5: Commit** — `git add backend/settings.py backend/tests/test_settings.py backend/requirements.txt .gitignore && git commit -m "feat: P1 settings (database, jenkins, worker, owner override)"`
 
 ---
 
@@ -135,7 +135,7 @@ Note: the conftest autouse fixture sets `env_file` to `None` per test. `test_env
   - One-to-one relationships from `Event` to `enrichment`, `analysis` and `action`, and from `Analysis` to `label`.
 - `tests/conftest.py`: the autouse fixture also sets `DATABASE_URL=sqlite://` (env) and calls `reset_engine_cache()` before and after each test, so every test gets a fresh in-memory DB.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```python
 import pytest
@@ -170,10 +170,10 @@ def test_json_columns_roundtrip():
         assert s.query(Analysis).one().response == {"validated": True}
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_store.py -q` → `ModuleNotFoundError: store`.
-- [ ] **Step 3: Implement** per Interfaces.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`.
-- [ ] **Step 5: Commit** — `git add backend/store backend/tests/test_store.py backend/tests/conftest.py && git commit -m "feat: add SQLAlchemy store for events, analyses, actions, labels"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_store.py -q` → `ModuleNotFoundError: store`.
+- [x] **Step 3: Implement** per Interfaces.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`.
+- [x] **Step 5: Commit** — `git add backend/store backend/tests/test_store.py backend/tests/conftest.py && git commit -m "feat: add SQLAlchemy store for events, analyses, actions, labels"`
 
 ---
 
@@ -199,7 +199,7 @@ def test_json_columns_roundtrip():
     6. Otherwise insert an `Event(source="webhook", status="queued", next_attempt_at=utcnow())` → 202 `{"event_id": id, "duplicate": false}`
   - The token value is never logged.
 
-- [ ] **Step 1: Failing tests** (use `TestClient(main.app)`; a fixture sets `JENKINS_WEBHOOK_TOKEN=t0k` and `JENKINS_URL=https://ci.example.com` and clears the settings cache)
+- [x] **Step 1: Failing tests** (use `TestClient(main.app)`; a fixture sets `JENKINS_WEBHOOK_TOKEN=t0k` and `JENKINS_URL=https://ci.example.com` and clears the settings cache)
 
 ```python
 HOOK = {"job": "acme/build", "build_number": 7,
@@ -236,10 +236,10 @@ def test_non_failure_result_ignored(webhook_env):
     assert r.status_code == 200 and r.json() == {"status": "ignored"}
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_webhooks.py -q` → 404s.
-- [ ] **Step 3: Implement** the router per Interfaces.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`.
-- [ ] **Step 5: Commit** — `git add backend/api backend/main.py backend/tests/test_webhooks.py && git commit -m "feat: token-authenticated Jenkins failure webhook with dedupe"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_webhooks.py -q` → 404s.
+- [x] **Step 3: Implement** the router per Interfaces.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`.
+- [x] **Step 5: Commit** — `git add backend/api backend/main.py backend/tests/test_webhooks.py && git commit -m "feat: token-authenticated Jenkins failure webhook with dedupe"`
 
 ---
 
@@ -264,7 +264,7 @@ def test_non_failure_result_ignored(webhook_env):
   - Auth: `httpx.BasicAuth(username, api_token)`.
   - `jenkins_client_from_settings() -> JenkinsClient` raises `JenkinsError("Jenkins is not configured")` when the URL, username or token is missing.
 
-- [ ] **Step 1: Failing tests** (build a `MockTransport` handler that routes on `request.url.path`; `client = JenkinsClient("https://ci.example.com/", "u", "tok", timeout=5, max_log_bytes=64, transport=...)`)
+- [x] **Step 1: Failing tests** (build a `MockTransport` handler that routes on `request.url.path`; `client = JenkinsClient("https://ci.example.com/", "u", "tok", timeout=5, max_log_bytes=64, transport=...)`)
 
 ```python
 BUILD = "https://ci.example.com/job/acme/job/build/7/"
@@ -302,10 +302,10 @@ def test_basic_auth_header_sent():
     assert requests_seen[-1].headers["authorization"].startswith("Basic ")
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_jenkins_client.py -q` → import error.
-- [ ] **Step 3: Implement** per Interfaces. For the streaming tail, use `client.stream("GET", ...)` with `iter_bytes()` and a `bytearray` trimmed to `max_log_bytes` after each chunk.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`.
-- [ ] **Step 5: Commit** — `git add backend/clients backend/tests/test_jenkins_client.py && git commit -m "feat: read-only Jenkins REST client with URL scoping and bounded log fetch"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_jenkins_client.py -q` → import error.
+- [x] **Step 3: Implement** per Interfaces. For the streaming tail, use `client.stream("GET", ...)` with `iter_bytes()` and a `bytearray` trimmed to `max_log_bytes` after each chunk.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`.
+- [x] **Step 5: Commit** — `git add backend/clients backend/tests/test_jenkins_client.py && git commit -m "feat: read-only Jenkins REST client with URL scoping and bounded log fetch"`
 
 ---
 
@@ -323,7 +323,7 @@ def test_basic_auth_header_sent():
   - `@dataclass EnrichmentData`: `build: BuildInfo` (parameters already redacted), `console: ConsoleLog` (text already redacted), `failing_stage: str | None`, `artifactory_links: list[str]`, `gerrit_scope: dict[str, str]`
   - `enrich(client: JenkinsClient, build_url: str) -> EnrichmentData`: calls build info, console and stages; redacts the console text and parameters; computes the rest. `gerrit_scope` is computed from the **unredacted** parameters, because none of its keys match secret names.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```python
 def test_failing_stage_prefers_wfapi():
@@ -358,10 +358,10 @@ def test_enrich_redacts_console_and_params(): ...
     # assert data.failing_stage == "Compile"
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_enrichment.py tests/test_redaction.py -q`.
-- [ ] **Step 3: Implement** per Interfaces.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`.
-- [ ] **Step 5: Commit** — `git add backend/enrichment.py backend/utils/redaction.py backend/tests/test_enrichment.py backend/tests/test_redaction.py && git commit -m "feat: enrichment (failing stage, artifactory links, gerrit scope, redaction)"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_enrichment.py tests/test_redaction.py -q`.
+- [x] **Step 3: Implement** per Interfaces.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`.
+- [x] **Step 5: Commit** — `git add backend/enrichment.py backend/utils/redaction.py backend/tests/test_enrichment.py backend/tests/test_redaction.py && git commit -m "feat: enrichment (failing stage, artifactory links, gerrit scope, redaction)"`
 
 ---
 
@@ -400,7 +400,7 @@ def test_enrich_redacts_console_and_params(): ...
 | `compilation.compiler_error` | compilation | `\S+\.(java\|kt\|scala\|c\|cc\|cpp\|cxx\|h\|hpp\|go\|cs\|ts\|rs):\d+(:\d+)?:?\s+(fatal )?error\|error: cannot find symbol\|undefined reference to\|COMPILATION ERROR\|Compilation failed` |
 | `tests.failures` | needs_triage | `Tests run: \d+, Failures: [1-9]\|There (were\|are) test failures\|FAILED: \S*Test` |
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```python
 @pytest.mark.parametrize("name, category", [
@@ -441,10 +441,10 @@ def test_low_confidence_and_unvalidated_reasons():
     assert r == Reconciliation("needs_triage", ["unvalidated", "low_confidence"])
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_rules.py -q`.
-- [ ] **Step 3: Implement** per Interfaces and the rule table.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`. If a fixture also triggers a rule from a second category (e.g. `Connection refused` in the infra fixture is fine; anything that makes the set ambiguous is not), fix the pattern, not the fixture.
-- [ ] **Step 5: Commit** — `git add backend/classification backend/tests/test_rules.py && git commit -m "feat: deterministic rules engine and LLM/rules reconcile"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_rules.py -q`.
+- [x] **Step 3: Implement** per Interfaces and the rule table.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`. If a fixture also triggers a rule from a second category (e.g. `Connection refused` in the infra fixture is fine; anything that makes the set ambiguous is not), fix the pattern, not the fixture.
+- [x] **Step 5: Commit** — `git add backend/classification backend/tests/test_rules.py && git commit -m "feat: deterministic rules engine and LLM/rules reconcile"`
 
 ---
 
@@ -463,7 +463,7 @@ def test_low_confidence_and_unvalidated_reasons():
     - `needs_triage` → `None`.
   - Pure function; no I/O.
 
-- [ ] **Step 1: Failing tests** (build `EnrichmentData` with a small helper in the test file)
+- [x] **Step 1: Failing tests** (build `EnrichmentData` with a small helper in the test file)
 
 ```python
 def test_infra_rerun_denied_by_default(): 
@@ -491,8 +491,8 @@ def test_needs_triage_has_no_action():
     assert propose_action("needs_triage", "j", enr()) is None
 ```
 
-- [ ] **Step 2: Run, expect FAIL**. **Step 3: Implement.** **Step 4: Run, expect PASS** (`pytest tests -q`).
-- [ ] **Step 5: Commit** — `git add backend/policy.py backend/tests/test_policy.py && git commit -m "feat: shadow policy producing proposed remediation actions"`
+- [x] **Step 2: Run, expect FAIL**. **Step 3: Implement.** **Step 4: Run, expect PASS** (`pytest tests -q`).
+- [x] **Step 5: Commit** — `git add backend/policy.py backend/tests/test_policy.py && git commit -m "feat: shadow policy producing proposed remediation actions"`
 
 ---
 
@@ -521,7 +521,7 @@ def test_needs_triage_has_no_action():
     Any other exception is handled the same way (logged with `logger.exception` metadata only).
   - `main() -> None`: loop of `run_once` + `time.sleep(worker_poll_seconds)` when idle, using `jenkins_client_from_settings()` and `configure_logging`. Runs as `python -m worker`.
 
-- [ ] **Step 1: Failing tests** (`MockTransport` serves `compilation_java_symbol.log`, api/json with `GERRIT_CHANGE_NUMBER=48213`, and wfapi 404; `fake_llm` returns detector/root_cause/verdict JSON for the `[Line 20]` evidence line, computed the same way as `test_fixtures.py`)
+- [x] **Step 1: Failing tests** (`MockTransport` serves `compilation_java_symbol.log`, api/json with `GERRIT_CHANGE_NUMBER=48213`, and wfapi 404; `fake_llm` returns detector/root_cause/verdict JSON for the `[Line 20]` evidence line, computed the same way as `test_fixtures.py`)
 
 ```python
 def test_run_once_processes_event_end_to_end(fake_llm, queued_event, jenkins):
@@ -563,10 +563,10 @@ def test_stored_excerpt_is_redacted(fake_llm, queued_event, jenkins_with_secret_
     # console includes "Authorization: Bearer abc.def.123"; assert it's absent from enrichment.log_excerpt and analysis.response
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_worker.py -q`.
-- [ ] **Step 3: Implement** per Interfaces.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`.
-- [ ] **Step 5: Commit** — `git add backend/pipeline.py backend/worker.py backend/tests/test_worker.py && git commit -m "feat: worker with leased claims, retry/backoff, and shadow pipeline"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_worker.py -q`.
+- [x] **Step 3: Implement** per Interfaces.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`.
+- [x] **Step 5: Commit** — `git add backend/pipeline.py backend/worker.py backend/tests/test_worker.py && git commit -m "feat: worker with leased claims, retry/backoff, and shadow pipeline"`
 
 ---
 
@@ -584,7 +584,7 @@ def test_stored_excerpt_is_redacted(fake_llm, queued_event, jenkins_with_secret_
   - `require_role(role: str)` → dependency returning the `User`; insufficient role → 403.
   - `manage.py`: `python -m manage create-user <username> --role <role>` (reads the password via `getpass` twice and must match; an existing username is an error) and `python -m manage set-password <username>`.
 
-- [ ] **Step 1: Failing tests** (a mini FastAPI app in the test file with routes `GET /v` → `require_role("viewer")` and `GET /l` → `require_role("labeler")`)
+- [x] **Step 1: Failing tests** (a mini FastAPI app in the test file with routes `GET /v` → `require_role("viewer")` and `GET /l` → `require_role("labeler")`)
 
 ```python
 def test_hash_roundtrip_and_salted():
@@ -609,8 +609,8 @@ def test_manage_create_user(monkeypatch):
         assert s.query(User).filter_by(username="alice").one().role == "labeler"
 ```
 
-- [ ] **Step 2: Run, expect FAIL**. **Step 3: Implement.** **Step 4: Run, expect PASS** (`pytest tests -q`).
-- [ ] **Step 5: Commit** — `git add backend/auth.py backend/manage.py backend/tests/test_auth.py && git commit -m "feat: local accounts with scrypt hashing, Basic auth and roles"`
+- [x] **Step 2: Run, expect FAIL**. **Step 3: Implement.** **Step 4: Run, expect PASS** (`pytest tests -q`).
+- [x] **Step 5: Commit** — `git add backend/auth.py backend/manage.py backend/tests/test_auth.py && git commit -m "feat: local accounts with scrypt hashing, Basic auth and roles"`
 
 ---
 
@@ -626,7 +626,7 @@ def test_manage_create_user(monkeypatch):
   - `POST /api/events/{id}/label` takes `{verdict: "correct"|"incorrect", correct_category: ErrorCategory | None, note: str | None}` and upserts the `Label` for that event's analysis, with `reviewer = user.username`. It returns 422 when `verdict == "incorrect"` without `correct_category`, or when the event has no analysis.
   - `GET /api/metrics/accuracy` returns, for each `final_category` with labels, `{labeled, correct, accuracy}`, where `accuracy = round(correct / labeled, 3)`.
 
-- [ ] **Step 1: Failing tests** (seed helper creates events with analyses; users from Task 9 fixtures)
+- [x] **Step 1: Failing tests** (seed helper creates events with analyses; users from Task 9 fixtures)
 
 ```python
 def test_events_require_auth():
@@ -654,8 +654,8 @@ def test_detail_never_contains_raw_log(seeded, viewer):
     assert "log_excerpt" in d["enrichment"] and "console" not in json.dumps(d)
 ```
 
-- [ ] **Step 2: Run, expect FAIL**. **Step 3: Implement.** **Step 4: Run, expect PASS** (`pytest tests -q`).
-- [ ] **Step 5: Commit** — `git add backend/api/review.py backend/main.py backend/tests/test_review_api.py && git commit -m "feat: review API (events, detail, labels, accuracy)"`
+- [x] **Step 2: Run, expect FAIL**. **Step 3: Implement.** **Step 4: Run, expect PASS** (`pytest tests -q`).
+- [x] **Step 5: Commit** — `git add backend/api/review.py backend/main.py backend/tests/test_review_api.py && git commit -m "feat: review API (events, detail, labels, accuracy)"`
 
 ---
 
@@ -675,7 +675,7 @@ def test_detail_never_contains_raw_log(seeded, viewer):
     - A label form: Correct / Incorrect, a category select (required for Incorrect), a note, and Save.
   - All DOM writes use `textContent` or `createElement`; never `innerHTML` with data. `fetch` uses same-origin relative URLs, so the browser's Basic credentials apply.
 
-- [ ] **Step 1: Failing tests** (append to `test_review_api.py`)
+- [x] **Step 1: Failing tests** (append to `test_review_api.py`)
 
 ```python
 def test_ui_requires_auth():
@@ -691,8 +691,8 @@ def test_ui_never_uses_innerhtml():
     assert "innerHTML" not in js
 ```
 
-- [ ] **Step 2: Run, expect FAIL**. **Step 3: Implement** the route and the three files. **Step 4: Run, expect PASS** (`pytest tests -q`; `node --check backend/static/review/review.js`).
-- [ ] **Step 5: Commit** — `git add backend/static backend/main.py backend/tests/test_review_api.py && git commit -m "feat: authenticated shadow-mode review UI"`
+- [x] **Step 2: Run, expect FAIL**. **Step 3: Implement** the route and the three files. **Step 4: Run, expect PASS** (`pytest tests -q`; `node --check backend/static/review/review.js`).
+- [x] **Step 5: Commit** — `git add backend/static backend/main.py backend/tests/test_review_api.py && git commit -m "feat: authenticated shadow-mode review UI"`
 
 ---
 
@@ -717,7 +717,7 @@ def test_ui_never_uses_innerhtml():
     - How to create the first labeler: `python -m manage create-user`.
   - README: P1 run instructions (API + worker + `/ui/`). CLAUDE.md: the new modules and invariants (no external writes in P1; URL scoping; queue states; labels on analyses).
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```python
 # test_backfill.py
@@ -741,13 +741,13 @@ def test_webhook_to_review_end_to_end(webhook_env, fake_llm, jenkins, labeler):
 
 Move the shared fixtures (`webhook_env`, `jenkins`, `queued_event`, `compilation_responses`, user fixtures) into `tests/conftest.py` or `tests/fakes.py` when a second test file needs them.
 
-- [ ] **Step 2: Run, expect FAIL**. **Step 3: Implement** `backfill.py`, the compose changes, `.dockerignore` and the docs.
-- [ ] **Step 4: Verify**:
+- [x] **Step 2: Run, expect FAIL**. **Step 3: Implement** `backfill.py`, the compose changes, `.dockerignore` and the docs.
+- [x] **Step 4: Verify**:
   - `pytest tests -q` → all pass.
   - `docker build -t jenkins-ai-backend ./backend` succeeds.
   - `docker compose config` is valid.
   - Manual: start the API and the worker locally with `JENKINS_URL` pointing at a stub. For the stub, `python -m http.server` serving a directory laid out as `job/demo/job/build/7/consoleText` and `api/json` from the fixtures. POST the webhook with curl, then confirm the event appears in `/ui/` after login.
-- [ ] **Step 5: Commit** — `git add backend/backfill.py backend/tests docker-compose.yml backend/.dockerignore docs/integration README.md CLAUDE.md && git commit -m "feat: backfill CLI, worker service, webhook integration docs"`
+- [x] **Step 5: Commit** — `git add backend/backfill.py backend/tests docker-compose.yml backend/.dockerignore docs/integration README.md CLAUDE.md && git commit -m "feat: backfill CLI, worker service, webhook integration docs"`
 
 ---
 

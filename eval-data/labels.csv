@@ -1,0 +1,22 @@
+file,label,confidence,note
+gen3plus_mid_user_preint__678.log,infra,clear,timeout waiting for agent; no workspace
+tatagen3_mid02_ice_userdebug_dailybuild__1160.log,infra,clear,timeout waiting for agent; no workspace
+tatagen3plus_high7_user_signed_release_preint__446.log,infra,clear,cannot contact agent
+TataGen3_Remote_High_L1_EV_Auto_Trigger__1068.log,infra,clear,all nodes of label offline
+TataGen3_Remote_High_L1_ICE_Auto_Trigger__1069.log,infra,clear,all nodes of label offline
+tatagen3_mid0_10_inch_ice_userdebug_release_preint__367.log,infra,likely,"controller restart: checkout cannot resume, no workspace"
+gen3plus_pid_ice_tagging__740.log,infra,likely,channel closed / cannot delete script file
+tatagen3plus_high8_variant_EV_tagging__911.log,infra,likely,channel closed / cannot delete script file
+HIP_ArchGenAI_scanner__34.log,devops,clear,"git auth failed, invalid token"
+HIP_QC_8387_ArchGenAI_scanner__153.log,devops,clear,"git auth failed, invalid token"
+Subaru_Move_Elvis_ticket__885.log,devops,clear,git auth failed
+IDCevo_mainline_FOSS__36.log,devops,clear,sh syntax error in generated script
+IDCevo_PU2611_FOSS__88.log,devops,clear,sh syntax error in generated script
+IDCevo_Kernel_Checkpatch__2091.log,devops,likely,python automation script AttributeError
+idcevo-jira-fetch__495.log,devops,likely,jira auth/token
+IDCevo_OND_Build_A17_Beta3_migration_2__21.log,devops,likely,repo sync: invalid manifest revision
+gen3plus_pid_cg_my26_aug26_release_tagging__147.log,devops,likely,script treats identical files as failure
+fixture__infra_agent_offline.log,infra,clear,repo fixture
+fixture__devops_missing_credentials.log,devops,clear,repo fixture
+fixture__compilation_java_symbol.log,compilation,clear,repo fixture
+fixture__test_failure.log,needs_triage,clear,repo fixture

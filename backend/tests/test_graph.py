@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from graph import analyze_log, build_analysis_response
 from tests.fakes import detected_json, root_cause_json, verdict_json
 
@@ -122,3 +126,115 @@ def test_analyze_log_fast_on_long_lines(fake_llm):
     analyze_log(log)
 
     assert time.monotonic() - start < 3.0
+
+
+# ---- options: merged agent, validator gate, per-agent models ---------------
+
+def combined_json(category, evidence, confidence="high", main_error="Build failed"):
+    return json.dumps({
+        "main_error": main_error,
+        "root_cause": "r",
+        "error_category": category,
+        "evidence": evidence,
+        "affected_component": "c",
+        "recommended_fix": "f",
+        "confidence": confidence,
+    })
+
+
+@pytest.fixture
+def merged(monkeypatch):
+    from settings import get_settings
+
+    monkeypatch.setenv("LLM_MERGE_DETECTOR", "true")
+    get_settings.cache_clear()
+
+
+def test_merged_agent_uses_two_calls(fake_llm, merged):
+    fake = fake_llm([combined_json("infra", [EVID]), verdict_json(True)])
+
+    response = build_analysis_response(analyze_log(LOG), "b.log")
+
+    assert len(fake.calls) == 2
+    assert response["error_category"] == "infra"
+    assert response["validated"] is True
+    assert response["evidence"] == [EVID]
+    assert response["failure_summary"] == "Build failed"
+
+
+def test_merged_agent_ungrounded_evidence_never_validates(fake_llm, merged):
+    bad = combined_json("infra", ["[Line 99] invented"])
+    fake_llm([bad, verdict_json(True)] * 3)
+
+    response = build_analysis_response(analyze_log(LOG), "b.log")
+
+    assert response["validated"] is False
+    assert response["error_category"] == "needs_triage"
+
+
+def test_merged_agent_retry_carries_validator_feedback(fake_llm, merged):
+    fake = fake_llm([
+        combined_json("devops", [EVID]), verdict_json(False, "unsupported"),
+        combined_json("infra", [EVID]), verdict_json(True),
+    ])
+
+    response = build_analysis_response(analyze_log(LOG), "b.log")
+
+    assert response["attempts"] == 2 and response["error_category"] == "infra"
+    first, second = fake.calls[0]["messages"][0]["content"], fake.calls[2]["messages"][0]["content"]
+    assert "Validator feedback" not in first
+    assert "Validator feedback" in second and "unsupported" in second
+
+
+def test_first_attempt_prompt_has_no_empty_previous_block(fake_llm):
+    fake = fake_llm([
+        detected_json([EVID]), root_cause_json("infra", [EVID]), verdict_json(True),
+    ])
+
+    analyze_log(LOG)
+
+    root_cause_prompt = fake.calls[1]["messages"][0]["content"]
+    assert "Previous root cause" not in root_cause_prompt
+
+
+def test_fix_does_not_gate_validation_when_disabled(fake_llm, monkeypatch):
+    from settings import get_settings
+
+    monkeypatch.setenv("VALIDATOR_CHECKS_FIX", "false")
+    get_settings.cache_clear()
+    payload = json.loads(root_cause_json("infra", [EVID]))
+    payload["recommended_fix"] = " "
+    fake = fake_llm([detected_json([EVID]), json.dumps(payload), verdict_json(True)])
+
+    response = build_analysis_response(analyze_log(LOG), "b.log")
+
+    assert response["validated"] is True and response["error_category"] == "infra"
+    validator_prompt = fake.calls[2]["messages"][0]["content"]
+    assert "recommended_fix" not in validator_prompt  # fix is not shown to it
+
+
+def test_empty_fix_still_blocks_by_default(fake_llm):
+    payload = json.loads(root_cause_json("infra", [EVID]))
+    payload["recommended_fix"] = " "
+    fake_llm([detected_json([EVID])] + [json.dumps(payload), verdict_json(True)] * 3)
+
+    response = build_analysis_response(analyze_log(LOG), "b.log")
+
+    assert response["validated"] is False
+
+
+def test_each_agent_uses_its_own_model(fake_llm, monkeypatch):
+    from settings import get_settings
+
+    monkeypatch.setenv("LLM_MODEL_DETECTOR", "m-detect")
+    monkeypatch.setenv("LLM_MODEL_VALIDATOR", "m-validate")
+    get_settings.cache_clear()
+    fake = fake_llm([
+        detected_json([EVID]), root_cause_json("infra", [EVID]), verdict_json(True),
+    ])
+
+    analyze_log(LOG)
+
+    assert [c["model"] for c in fake.calls] == [
+        "m-detect", "openai/gpt-oss-120b", "m-validate",
+    ]

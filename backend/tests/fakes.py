@@ -59,7 +59,11 @@ class FakeJenkins:
     """httpx MockTransport routing on URL path; records every request."""
 
     def __init__(self, routes=None):
-        # path -> (status, body); body is bytes/str (raw) or dict/list (JSON)
+        # Key: "/path" (any method) or ("POST", "/path").
+        # Value: (status, body) or (status, body, headers), or a callable
+        # taking the request and returning one of those (or raising an
+        # httpx error to simulate a transport failure).
+        # body is bytes/str (raw) or dict/list (JSON).
         self.routes = dict(routes or {})
         self.seen = []
 
@@ -67,15 +71,28 @@ class FakeJenkins:
         import httpx
 
         self.seen.append(request)
-        status, body = self.routes.get(request.url.path, (404, b"not found"))
+        route = (
+            self.routes.get((request.method, request.url.path))
+            or self.routes.get(request.url.path)
+            or (404, b"not found")
+        )
+
+        if callable(route):
+            route = route(request)
+
+        status, body, *rest = route
+        headers = rest[0] if rest else None
 
         if isinstance(body, (dict, list)):
-            return httpx.Response(status, json=body)
+            return httpx.Response(status, json=body, headers=headers)
 
         if isinstance(body, str):
             body = body.encode()
 
-        return httpx.Response(status, content=body)
+        return httpx.Response(status, content=body, headers=headers)
+
+    def posts(self):
+        return [r for r in self.seen if r.method == "POST"]
 
     @property
     def transport(self):

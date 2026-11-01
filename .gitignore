@@ -41,3 +41,10 @@ backend/data/
 # Real build logs fetched for classification checks
 failed-logs/
 jenkins_json_response.txt
+
+# Benchmark data: internal Jenkins consoles and provisional labels
+eval-data/
+docs/
+
+backend/tests/
+eval-data/ui-check/

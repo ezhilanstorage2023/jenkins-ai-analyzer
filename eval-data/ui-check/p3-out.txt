@@ -1,0 +1,10 @@
+{
+  "step": "read email",
+  "controlsText": "infra re-run:  hadow",
+  "buttons": [],
+  "email": "Deci ion\nwould  end\nTo\nte ter@example.com\nRecipient from\noverride\nWhy\n—\nSubject\n[Jenkin ] x/demo #5 failed (devop )\nMe age body (not  ent: thi   y tem ha  no email  ender)\nJob: x/demo\nRoot cau e:\nMi ing credential  entry.\n\nRecipient i  right\nWrong recipient",
+  "sectionHidden": false,
+  "afterFeedback": true,
+  "stats": "email previews (not sent): 1 would send · 0 suppressed · 0 blocked · recipients 0 right / 0 wrong",
+  "pageProblems": []
+}

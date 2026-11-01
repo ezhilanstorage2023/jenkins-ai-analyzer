@@ -99,3 +99,114 @@ def test_other_bad_request_is_provider_error(fake_llm):
         llm.complete_json("p", ValidationVerdict)
 
     assert not isinstance(exc.value, llm.LLMOutputError)
+
+
+# ---- rate limits, per-call model, reasoning effort -------------------------
+
+def _rate_limited(retry_after=None):
+    headers = {"retry-after": retry_after} if retry_after is not None else {}
+
+    return groq.RateLimitError(
+        "slow down",
+        response=httpx.Response(
+            429, headers=headers,
+            request=httpx.Request("POST", "https://api.groq.com"),
+        ),
+        body=None,
+    )
+
+
+@pytest.fixture
+def sleeps(monkeypatch):
+    waited = []
+    monkeypatch.setattr(llm, "_sleep", waited.append)
+    return waited
+
+
+def test_rate_limit_waits_retry_after_then_succeeds(fake_llm, sleeps):
+    fake = fake_llm([_rate_limited("2"), '{"valid": true}'])
+
+    assert llm.complete_json("p", ValidationVerdict).valid is True
+    assert sleeps == [2.0]
+    assert len(fake.calls) == 2
+
+
+def test_rate_limit_wait_is_capped(fake_llm, sleeps, monkeypatch):
+    monkeypatch.setenv("LLM_RATE_LIMIT_MAX_WAIT_SECONDS", "10")
+    from settings import get_settings
+    get_settings.cache_clear()
+    fake_llm([_rate_limited("600"), '{"valid": true}'])
+
+    llm.complete_json("p", ValidationVerdict)
+
+    assert sleeps == [10.0]
+
+
+def test_rate_limit_without_header_uses_default_wait(fake_llm, sleeps):
+    fake_llm([_rate_limited(), '{"valid": true}'])
+
+    llm.complete_json("p", ValidationVerdict)
+
+    assert sleeps == [5.0]
+
+
+def test_rate_limit_exhausted_raises_rate_limit_error(fake_llm, sleeps):
+    fake = fake_llm([_rate_limited("1")] * 3)
+
+    with pytest.raises(llm.LLMRateLimitError) as raised:
+        llm.complete_json("p", ValidationVerdict)
+
+    assert isinstance(raised.value, llm.LLMProviderError)  # still maps to 503
+    assert len(fake.calls) == 3          # first try + llm_rate_limit_retries
+    assert sleeps == [1.0, 1.0]
+
+
+def test_rate_limit_wait_does_not_use_a_parse_attempt(fake_llm, sleeps):
+    # 2 rate limits, then 3 bad outputs (the full parse budget), then success
+    # would not be reachable if waits consumed parse attempts.
+    fake = fake_llm([_rate_limited("0"), _rate_limited("0"), "bad", "bad", '{"valid": true}'])
+
+    assert llm.complete_json("p", ValidationVerdict).valid is True
+    assert len(fake.calls) == 5
+
+
+def test_default_model_and_no_reasoning_effort(fake_llm):
+    fake = fake_llm(['{"valid": true}'])
+
+    llm.complete_json("p", ValidationVerdict)
+
+    assert fake.calls[0]["model"] == "openai/gpt-oss-120b"
+    assert "reasoning_effort" not in fake.calls[0]
+
+
+def test_model_and_reasoning_effort_overrides(fake_llm):
+    fake = fake_llm(['{"valid": true}'])
+
+    llm.complete_json(
+        "p", ValidationVerdict, model="openai/gpt-oss-20b", reasoning_effort="low"
+    )
+
+    assert fake.calls[0]["model"] == "openai/gpt-oss-20b"
+    assert fake.calls[0]["reasoning_effort"] == "low"
+
+
+def test_reasoning_effort_from_settings(fake_llm, monkeypatch):
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    from settings import get_settings
+    get_settings.cache_clear()
+    fake = fake_llm(['{"valid": true}'])
+
+    llm.complete_json("p", ValidationVerdict)
+
+    assert fake.calls[0]["reasoning_effort"] == "low"
+
+
+def test_model_for_falls_back_to_default(monkeypatch):
+    from settings import get_settings
+    monkeypatch.setenv("LLM_MODEL_VALIDATOR", "openai/gpt-oss-20b")
+    get_settings.cache_clear()
+    settings = get_settings()
+
+    assert settings.model_for("validator") == "openai/gpt-oss-20b"
+    assert settings.model_for("detector") == settings.llm_model
+    assert settings.model_for("root_cause") == settings.llm_model

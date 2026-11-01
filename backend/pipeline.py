@@ -9,13 +9,15 @@ from sqlalchemy.orm import Session
 
 from classification.reconcile import reconcile
 from classification.rules import RULES_VERSION, evaluate_rules
+from executor import create_execution
 from clients.jenkins import JenkinsClient
 from enrichment import enrich
 from graph import analyze_log, build_analysis_response
+from notify import build_preview
 from policy import propose_action
 from settings import get_settings
 from store.db import utcnow
-from store.models import Analysis, Enrichment, Event, ProposedAction
+from store.models import Analysis, EmailDelivery, Enrichment, Event, ProposedAction
 
 logger = logging.getLogger("pipeline")
 
@@ -103,6 +105,35 @@ def process_event(
             reason_codes=proposal.reason_codes,
             created_at=now,
         ))
+
+        # Only "auto" executes. In "shadow" the proposal above is all there is.
+        if (
+            proposal.action_type == "rerun"
+            and proposal.allowed
+            and get_settings().mode_infra == "auto"
+        ):
+            create_execution(session, event, now)
+
+    # DevOps owner notification preview (shadow: nothing is ever sent). Built
+    # before touching the session, and a bug here must not fail the event.
+    if decision.final_category == "devops" and get_settings().mode_devops != "off":
+        try:
+            note = build_preview(
+                session, event, decision.final_category, analysis, data,
+                jenkins, now,
+            )
+            session.add(note)
+
+            # Only "auto" sends; "shadow" stops at the preview.
+            if get_settings().mode_devops == "auto" and note.decision == "would_send":
+                session.add(EmailDelivery(
+                    notification=note, status="pending", reason_codes=[],
+                    created_at=now, updated_at=now,
+                ))
+        except Exception:
+            logger.exception(
+                "Notification preview failed", extra={"event_id": event.id}
+            )
 
     logger.info(
         "Event processed",

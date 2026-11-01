@@ -42,17 +42,17 @@
 
 **Files:** none
 
-- [ ] **Step 1: Create branch**
+- [x] **Step 1: Create branch**
 
 Run: `git switch -c p0-harden`
 Expected: `Switched to a new branch 'p0-harden'`. `CLAUDE.md` and `docs/` stay untracked; they are committed in Task 9.
 
-- [ ] **Step 2: Create venv and install**
+- [x] **Step 2: Create venv and install**
 
 Run: `cd backend && /home/vasan/.local/bin/python3.12 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
 Expected: install completes with no resolver errors.
 
-- [ ] **Step 3: Baseline tests**
+- [x] **Step 3: Baseline tests**
 
 Run: `pytest tests -q`
 Expected: `5 passed`. If anything fails, stop and report; do not start Task 1 on a red baseline.
@@ -83,7 +83,7 @@ Expected: `5 passed`. If anything fails, stop and report; do not start Task 1 on
   - disables `.env` loading with `monkeypatch.setitem(Settings.model_config, "env_file", None)`, so a developer's real `backend/.env` key never leaks into tests;
   - calls `get_settings.cache_clear()`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 from settings import get_settings
@@ -107,10 +107,10 @@ def test_env_override(monkeypatch):
     assert s.max_upload_bytes == 100
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_settings.py -v` → `ModuleNotFoundError: No module named 'settings'`.
-- [ ] **Step 3: Implement** `settings.py` per Interfaces and `conftest.py` fixture. Add `pydantic-settings` and `httpx` to `requirements.txt`, pinned to the versions `pip install` resolves (`pip freeze | grep -iE "pydantic-settings|httpx"`). Keep the existing `python-dotenv` pin; pydantic-settings uses it for `env_file`.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass (7).
-- [ ] **Step 5: Commit** — `git add backend/settings.py backend/tests/conftest.py backend/tests/test_settings.py backend/requirements.txt && git commit -m "feat: add pydantic settings module"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_settings.py -v` → `ModuleNotFoundError: No module named 'settings'`.
+- [x] **Step 3: Implement** `settings.py` per Interfaces and `conftest.py` fixture. Add `pydantic-settings` and `httpx` to `requirements.txt`, pinned to the versions `pip install` resolves (`pip freeze | grep -iE "pydantic-settings|httpx"`). Keep the existing `python-dotenv` pin; pydantic-settings uses it for `env_file`.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass (7).
+- [x] **Step 5: Commit** — `git add backend/settings.py backend/tests/conftest.py backend/tests/test_settings.py backend/requirements.txt && git commit -m "feat: add pydantic settings module"`
 
 ---
 
@@ -128,7 +128,7 @@ def test_env_override(monkeypatch):
   - `class ValidationVerdict(BaseModel)`: `valid: bool`, `reason: str = ""`, `unsupported_claims: list[str] = []`
   - `class AnalysisResponse(BaseModel)` (replaces the current one): `filename: str`, `failure_summary: str`, `root_cause: str`, `error_category: ErrorCategory`, `llm_category: ErrorCategory | None`, `validated: bool`, `validation_reason: str`, `attempts: int`, `affected_component: str`, `evidence: list[str]`, `recommended_fix: str`, `confidence: Literal["high", "medium", "low", "unknown"]`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 import pytest
@@ -153,10 +153,10 @@ def test_root_cause_rejects_legacy_category():
         RootCauseResult(**BASE | {"error_category": "Developer-Side Error"})
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_models.py -v` → `ImportError: cannot import name 'ErrorCategory'`.
-- [ ] **Step 3: Implement** the models per Interfaces.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests/test_models.py -v`. (`test_validation.py::test_build_analysis_response_includes_error_category` may still pass; Task 5 rewrites it.)
-- [ ] **Step 5: Commit** — `git add backend/models.py backend/tests/test_models.py && git commit -m "feat: add 4-class taxonomy and LLM output schemas"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_models.py -v` → `ImportError: cannot import name 'ErrorCategory'`.
+- [x] **Step 3: Implement** the models per Interfaces.
+- [x] **Step 4: Run, expect PASS** — `pytest tests/test_models.py -v`. (`test_validation.py::test_build_analysis_response_includes_error_category` may still pass; Task 5 rewrites it.)
+- [x] **Step 5: Commit** — `git add backend/models.py backend/tests/test_models.py && git commit -m "feat: add 4-class taxonomy and LLM output schemas"`
 
 ---
 
@@ -182,7 +182,7 @@ def test_root_cause_rejects_legacy_category():
   - JSON builders: `detected_json(evidence: list[str], main_error: str = "Build failed") -> str`; `root_cause_json(category: str, evidence: list[str], confidence: str = "high") -> str`; `verdict_json(valid: bool, reason: str = "ok") -> str`.
 - Produces in `conftest.py`: fixture `fake_llm(monkeypatch)` returning a factory `make(responses) -> FakeLLMClient` that monkeypatches `llm.get_llm_client` to return the fake.
 
-- [ ] **Step 1: Write failing tests** in `tests/test_llm.py`
+- [x] **Step 1: Write failing tests** in `tests/test_llm.py`
 
 ```python
 import groq, httpx, pytest
@@ -233,10 +233,10 @@ def test_missing_api_key_raises_unavailable():
         llm.get_llm_client()
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_llm.py -v` → `ModuleNotFoundError: No module named 'llm'`.
-- [ ] **Step 3: Implement** `llm.py`, `tests/fakes.py`, and the `fake_llm` fixture per Interfaces. The cached client must reset when settings change: put the cache on a helper keyed by the API key string, and clear it in the conftest autouse fixture.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests/test_llm.py -v` → 7 passed.
-- [ ] **Step 5: Commit** — `git add backend/llm.py backend/tests/fakes.py backend/tests/test_llm.py backend/tests/conftest.py && git commit -m "feat: add single LLM client with schema-validated JSON and retry"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_llm.py -v` → `ModuleNotFoundError: No module named 'llm'`.
+- [x] **Step 3: Implement** `llm.py`, `tests/fakes.py`, and the `fake_llm` fixture per Interfaces. The cached client must reset when settings change: put the cache on a helper keyed by the API key string, and clear it in the conftest autouse fixture.
+- [x] **Step 4: Run, expect PASS** — `pytest tests/test_llm.py -v` → 7 passed.
+- [x] **Step 5: Commit** — `git add backend/llm.py backend/tests/fakes.py backend/tests/test_llm.py backend/tests/conftest.py && git commit -m "feat: add single LLM client with schema-validated JSON and retry"`
 
 ---
 
@@ -258,7 +258,7 @@ def test_missing_api_key_raises_unavailable():
   6. Token shapes `\bgsk_[A-Za-z0-9]{20,}`, `\bgh[pousr]_[A-Za-z0-9]{36,}`, `\bAKIA[0-9A-Z]{16}\b`, `\bxox[baprs]-[A-Za-z0-9-]{10,}`.
 - Produces: `configure_logging(level: str) -> None` and `class JsonFormatter(logging.Formatter)` in `logging_config.py`. Each record is emitted as one JSON line with keys `ts` (ISO-8601 UTC), `level`, `logger`, `message`, plus any `extra=` fields. Configuration is idempotent (replaces root handlers, never stacks them).
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 import pytest
@@ -301,10 +301,10 @@ def test_json_formatter_emits_one_json_object():
     assert out["level"] == "INFO" and out["logger"] == "graph" and out["event_id"] == "e1"
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_redaction.py tests/test_logging_config.py -v` → import errors.
-- [ ] **Step 3: Implement** both modules per Interfaces.
-- [ ] **Step 4: Run, expect PASS** — same command → all pass.
-- [ ] **Step 5: Commit** — `git add backend/utils/redaction.py backend/logging_config.py backend/tests/test_redaction.py backend/tests/test_logging_config.py && git commit -m "feat: add secret redaction and JSON logging"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_redaction.py tests/test_logging_config.py -v` → import errors.
+- [x] **Step 3: Implement** both modules per Interfaces.
+- [x] **Step 4: Run, expect PASS** — same command → all pass.
+- [x] **Step 5: Commit** — `git add backend/utils/redaction.py backend/logging_config.py backend/tests/test_redaction.py backend/tests/test_logging_config.py && git commit -m "feat: add secret redaction and JSON logging"`
 
 ---
 
@@ -327,7 +327,7 @@ def test_json_formatter_emits_one_json_object():
   - Text fields default to `"Unknown"`, and `recommended_fix` to `"Not yet determined"`.
   - Never raises `KeyError` on missing keys.
 
-- [ ] **Step 1: Write failing tests** (replace the old category test in `tests/test_validation.py`)
+- [x] **Step 1: Write failing tests** (replace the old category test in `tests/test_validation.py`)
 
 ```python
 from models import AnalysisResponse
@@ -359,10 +359,10 @@ def test_empty_result_does_not_raise():
     AnalysisResponse(**r)
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_validation.py -v` → `KeyError: 'validated'` (or similar).
-- [ ] **Step 3: Implement** `build_analysis_response` per the rules above.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`.
-- [ ] **Step 5: Commit** — `git commit -am "feat: surface validated flag and route unvalidated results to needs_triage"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_validation.py -v` → `KeyError: 'validated'` (or similar).
+- [x] **Step 3: Implement** `build_analysis_response` per the rules above.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`.
+- [x] **Step 5: Commit** — `git commit -am "feat: surface validated flag and route unvalidated results to needs_triage"`
 
 ---
 
@@ -396,7 +396,7 @@ LOG = "Started\nCompiling\n[javac] Foo.java:3: error: cannot find symbol\nBUILD 
 EVID = "[Line 3] [javac] Foo.java:3: error: cannot find symbol"
 ```
 
-- [ ] **Step 1: Write failing tests** in `tests/test_graph.py`
+- [x] **Step 1: Write failing tests** in `tests/test_graph.py`
 
 ```python
 from graph import analyze_log, build_analysis_response
@@ -443,10 +443,10 @@ def test_secrets_never_reach_llm_prompt(fake_llm, caplog):
     assert "SECRETTOKEN123" not in caplog.text
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_graph.py -v` → failures (old graph calls the real client and has no short-circuit).
-- [ ] **Step 3: Implement** the changes listed in Interfaces.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass, including the existing `test_validation.py` and `test_log_processor.py`.
-- [ ] **Step 5: Commit** — `git add backend/graph.py backend/tests/test_graph.py && git commit -m "feat: harden LangGraph pipeline with schema-validated LLM calls, redaction and 4-class taxonomy"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_graph.py -v` → failures (old graph calls the real client and has no short-circuit).
+- [x] **Step 3: Implement** the changes listed in Interfaces.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass, including the existing `test_validation.py` and `test_log_processor.py`.
+- [x] **Step 5: Commit** — `git add backend/graph.py backend/tests/test_graph.py && git commit -m "feat: harden LangGraph pipeline with schema-validated LLM calls, redaction and 4-class taxonomy"`
 
 ---
 
@@ -468,7 +468,7 @@ def test_secrets_never_reach_llm_prompt(fake_llm, caplog):
     - `LLMUnavailableError` → 503, detail `"LLM is not configured (GROQ_API_KEY missing)."`. Other `LLMProviderError` → 503, detail `"LLM provider request failed."`.
   - `GET /` and `POST /upload-log` are unchanged.
 
-- [ ] **Step 1: Write failing tests** in `tests/test_api.py` (use `fastapi.testclient.TestClient(main.app)`; post with `files={"file": ("b.log", body, "text/plain")}`)
+- [x] **Step 1: Write failing tests** in `tests/test_api.py` (use `fastapi.testclient.TestClient(main.app)`; post with `files={"file": ("b.log", body, "text/plain")}`)
 
 ```python
 import asyncio, pytest
@@ -522,10 +522,10 @@ def test_test_llm_endpoint_removed():
     assert client.get("/test-llm").status_code == 404
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_api.py -v`. Importing `main` may fail outright, since today it builds a Groq client with no key; that counts as the expected failure.
-- [ ] **Step 3: Implement** the `main.py` changes per Interfaces. Import `analyze_log` into `main`'s namespace so the monkeypatch in the last-but-one test takes effect.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass.
-- [ ] **Step 5: Commit** — `git add backend/main.py backend/tests/test_api.py && git commit -m "feat: run analysis off event loop, map LLM failures to 503, cap upload size"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_api.py -v`. Importing `main` may fail outright, since today it builds a Groq client with no key; that counts as the expected failure.
+- [x] **Step 3: Implement** the `main.py` changes per Interfaces. Import `analyze_log` into `main`'s namespace so the monkeypatch in the last-but-one test takes effect.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q` → all pass.
+- [x] **Step 5: Commit** — `git add backend/main.py backend/tests/test_api.py && git commit -m "feat: run analysis off event loop, map LLM failures to 503, cap upload size"`
 
 ---
 
@@ -543,7 +543,7 @@ def test_test_llm_endpoint_removed():
   - compilation: `[javac] /src/com/acme/Foo.java:42: error: cannot find symbol`
   - test failure: `Tests run: 120, Failures: 2, Errors: 0, Skipped: 1` and `FAILED: com.acme.FooTest.testParse`
 
-- [ ] **Step 1: Write tests** in `tests/test_fixtures.py`
+- [x] **Step 1: Write tests** in `tests/test_fixtures.py`
 
 ```python
 import pytest
@@ -573,10 +573,10 @@ def test_pipeline_end_to_end_per_category(fake_llm, name, signature, category):
     assert r["error_category"] == category and r["evidence"] == [evid]
 ```
 
-- [ ] **Step 2: Run, expect FAIL** — `pytest tests/test_fixtures.py -v` → `FileNotFoundError`.
-- [ ] **Step 3: Write the four fixture logs** per Interfaces. If `test_parser_keeps_signature_line` fails for the infra fixture because `ChannelClosedException` matches no pattern, add `r"\bchannelclosedexception\b"` and `r"\bcould not find credentials\b"` to `root_cause_patterns` in `utils/log_processor.py`. Those are the only parser changes allowed in this task.
-- [ ] **Step 4: Run, expect PASS** — `pytest tests -q`.
-- [ ] **Step 5: Commit** — `git add backend/tests/fixtures backend/tests/test_fixtures.py backend/utils/log_processor.py && git commit -m "test: add per-category Jenkins log fixtures"`
+- [x] **Step 2: Run, expect FAIL** — `pytest tests/test_fixtures.py -v` → `FileNotFoundError`.
+- [x] **Step 3: Write the four fixture logs** per Interfaces. If `test_parser_keeps_signature_line` fails for the infra fixture because `ChannelClosedException` matches no pattern, add `r"\bchannelclosedexception\b"` and `r"\bcould not find credentials\b"` to `root_cause_patterns` in `utils/log_processor.py`. Those are the only parser changes allowed in this task.
+- [x] **Step 4: Run, expect PASS** — `pytest tests -q`.
+- [x] **Step 5: Commit** — `git add backend/tests/fixtures backend/tests/test_fixtures.py backend/utils/log_processor.py && git commit -m "test: add per-category Jenkins log fixtures"`
 
 ---
 
@@ -597,15 +597,15 @@ def test_pipeline_end_to_end_per_category(fake_llm, name, signature, category):
   - Show `attempts` next to the confidence value.
   - All DOM writes keep using `textContent`.
 
-- [ ] **Step 1: Implement** the frontend changes.
-- [ ] **Step 2: Run backend tests** — `cd backend && pytest tests -q` → all pass.
-- [ ] **Step 3: Manual check without a key**
+- [x] **Step 1: Implement** the frontend changes.
+- [x] **Step 2: Run backend tests** — `cd backend && pytest tests -q` → all pass.
+- [x] **Step 3: Manual check without a key**
   - Run `uvicorn main:app --port 8000` from `backend/` with `GROQ_API_KEY` unset, and `python -m http.server 5500 --directory frontend` from the repo root.
   - Upload `backend/tests/fixtures/logs/compilation_java_symbol.log`. Expect the status line `Error: LLM is not configured (GROQ_API_KEY missing).`
   - Upload a file containing only `Finished: SUCCESS`. Expect the "Needs triage" category, the "Not validated" badge, and the reason "No error context found in log."
-- [ ] **Step 4: Manual check with key (if available)** — set `GROQ_API_KEY` in `backend/.env`, upload each of the 4 fixtures, and record the returned category and `validated` value in the commit message body. Mismatches are expected data for P1's eval set, not a failure of this task.
-- [ ] **Step 5: Docker build** — `docker build -t jenkins-ai-backend ./backend` → succeeds.
-- [ ] **Step 6: Commit**
+- [x] **Step 4: Manual check with key (if available)** — set `GROQ_API_KEY` in `backend/.env`, upload each of the 4 fixtures, and record the returned category and `validated` value in the commit message body. Mismatches are expected data for P1's eval set, not a failure of this task.
+- [x] **Step 5: Docker build** — `docker build -t jenkins-ai-backend ./backend` → succeeds.
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend README.md CLAUDE.md docs

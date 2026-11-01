@@ -316,6 +316,15 @@ With Docker, `docker compose up --build` also starts the `worker` service. It ex
 | Event stuck in `queued` / ends `failed` | Check `last_error` on the event in `/ui/`; Jenkins unreachable or Groq unavailable. Retries back off 60 s, 120 s, then the event is marked failed. After the outage: `python -m manage requeue --status failed`. |
 | `/ui/` keeps asking for a password | Wrong credentials; reset with `python -m manage set-password <user>`. |
 
+Windows (PowerShell), from the repository root:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m manage requeue --status failed
+python -m manage set-password <user>
+```
+
 ---
 
 ## 9. Configuration reference

@@ -167,12 +167,23 @@ def test_ui_serves_whitelisted_files_only(viewer):
     assert client.get("/ui/other.html", auth=viewer).status_code == 404
 
 
+def test_ui_files_must_be_revalidated_by_browsers(viewer):
+    for name in ("", "review.js", "review.css"):
+        response = client.get("/ui/" + name, auth=viewer)
+
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+
+
 def test_ui_never_uses_innerhtml():
-    assert "innerHTML" not in (STATIC / "review.js").read_text()
+    assert "innerHTML" not in (STATIC / "review.js").read_text(encoding="utf-8")
 
 
 def test_ui_labels_actions_as_shadow():
-    page = (STATIC / "index.html").read_text() + (STATIC / "review.js").read_text()
+    page = (
+        (STATIC / "index.html").read_text(encoding="utf-8")
+        + (STATIC / "review.js").read_text(encoding="utf-8")
+    )
 
     assert "Proposed (shadow — not executed)" in page
 

@@ -1,0 +1,44 @@
+import { spawn } from "node:child_process";
+import { writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const [url, prefix, role] = process.argv.slice(2);
+const port = Number(process.env.PORT) || (9340 + (role === "viewer" ? 1 : 0));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const edge = spawn("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), "jai-edge-"))}`, "--no-first-run", "--disable-gpu", "about:blank"], { stdio: "ignore" });
+let ws; for (let i = 0; i < 50 && !ws; i++) { try { const t = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); const p = t.find((x) => x.type === "page"); if (p) ws = new WebSocket(p.webSocketDebuggerUrl); } catch {} await sleep(200); }
+await new Promise((r) => ws.addEventListener("open", r));
+let id = 0; const pend = new Map(); const problems = [];
+ws.addEventListener("message", (m) => { const g = JSON.parse(m.data); if (g.id && pend.has(g.id)) { pend.get(g.id)(g); pend.delete(g.id); } if (g.method === "Runtime.exceptionThrown") problems.push(g.params.exceptionDetails.exception?.description || g.params.exceptionDetails.text); });
+const send = (method, params = {}) => new Promise((res) => { const n = ++id; pend.set(n, res); ws.send(JSON.stringify({ id: n, method, params })); });
+const run = async (e) => { const r = await send("Runtime.evaluate", { expression: e, awaitPromise: true, returnByValue: true }); if (r.result.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description); return r.result.result.value; };
+const until = async (e, label, ms = 20000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await run(e)) return; await sleep(200); } throw new Error("timeout: " + label); };
+const shot = async (n) => writeFileSync(`${prefix}-${n}.png`, Buffer.from((await send("Page.captureScreenshot", { format: "png" })).result.data, "base64"));
+const out = {};
+try {
+  await send("Page.enable"); await send("Runtime.enable"); await send("Page.navigate", { url });
+  await until(`document.getElementById('controls').innerText.length > 0`, "controls");
+  out.controlsText = await run(`document.getElementById('controls').innerText.replace(/\s+/g, ' ')`);
+  out.buttons = await run(`[...document.querySelectorAll('#controls button')].map(b => b.textContent)`);
+  if (role === "operator") {
+    await run(`document.querySelector('#controls button').click()`);
+    await until(`document.getElementById('controls').innerText.includes('KILL SWITCH ON')`, "kill switch on");
+    out.afterStop = await run(`document.getElementById('controls').innerText.replace(/\s+/g, ' ')`);
+    out.apiAfterStop = await run(`fetch('/api/controls').then(r => r.json()).then(j => j.kill_switch)`);
+    await shot("1-killswitch");
+    // resume asks first: auto-accept the confirm dialog
+    await run(`window.confirm = () => true`);
+    await run(`document.querySelector('#controls button').click()`);
+    await until(`!document.getElementById('controls').innerText.includes('KILL SWITCH ON')`, "resumed");
+    out.apiAfterResume = await run(`fetch('/api/controls').then(r => r.json()).then(j => j.kill_switch)`);
+  }
+  await run(`document.getElementById('tab-events').click()`);
+  await run(`(() => { const f = document.getElementById('filter'); f.value = 'all'; f.dispatchEvent(new Event('change')); })()`);
+  await until(`document.querySelectorAll('#events tr').length > 0`, "events row");
+  await run(`document.querySelector('#events tr').click()`);
+  await until(`!document.getElementById('detail').hidden && document.getElementById('detailTitle').textContent.includes('x/demo')`, "drawer");
+  out.heading = await run(`document.getElementById('actionHeading').textContent`);
+  out.executionBlock = await run(`document.getElementById('detailAction').innerText.replace(/\s+/g, ' ')`);
+  await shot("2-execution");
+} catch (e) { out.ERROR = String(e); await shot("error").catch(() => {}); }
+out.pageProblems = problems; console.log(JSON.stringify(out, null, 2)); ws.close(); edge.kill(); process.exit(out.ERROR ? 1 : 0);

@@ -37,6 +37,12 @@ class RootCauseResult(BaseModel):
         return value
 
 
+class CombinedResult(RootCauseResult):
+    """Detection + root cause in one call (llm_merge_detector)."""
+
+    main_error: str = "Unknown"
+
+
 class ValidationVerdict(BaseModel):
     valid: bool
     reason: str = ""

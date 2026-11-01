@@ -1,0 +1,21 @@
+{"file": "gen3plus_mid_user_preint__678.log", "label": "infra", "confidence": "high", "config": "qwen-low", "llm_category": "devops", "validated": true, "final_category": "devops", "reason_codes": [], "rule_categories": [], "attempts": 1, "calls": 3, "prompt_tokens": 7450, "completion_tokens": 2771, "seconds": 79.7, "root_cause": "The archive_failures.groovy script (invoked from the Declarative Post Actions at WorkflowScript line 247) calls an sh step without being wrapped in a node block, so no agent/workspace is allocated and"}
+{"file": "tatagen3_mid02_ice_userdebug_dailybuild__1160.log", "label": "infra", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "tatagen3plus_high7_user_signed_release_preint__446.log", "label": "infra", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "TataGen3_Remote_High_L1_EV_Auto_Trigger__1068.log", "label": "infra", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "TataGen3_Remote_High_L1_ICE_Auto_Trigger__1069.log", "label": "infra", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "tatagen3_mid0_10_inch_ice_userdebug_release_preint__367.log", "label": "infra", "confidence": "likely", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "gen3plus_pid_ice_tagging__740.log", "label": "infra", "confidence": "likely", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "tatagen3plus_high8_variant_EV_tagging__911.log", "label": "infra", "confidence": "likely", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "HIP_ArchGenAI_scanner__34.log", "label": "devops", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "HIP_QC_8387_ArchGenAI_scanner__153.log", "label": "devops", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "Subaru_Move_Elvis_ticket__885.log", "label": "devops", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "IDCevo_mainline_FOSS__36.log", "label": "devops", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "IDCevo_PU2611_FOSS__88.log", "label": "devops", "confidence": "high", "config": "qwen-low", "llm_category": "devops", "validated": true, "final_category": "devops", "reason_codes": [], "rule_categories": [], "attempts": 1, "calls": 3, "prompt_tokens": 2909, "completion_tokens": 2635, "seconds": 141.2, "root_cause": "The Jenkinsfile's `sh` step in the Blackduck FOSS Scan stage contains bash-specific syntax (likely an array, `[[ ]]`, or similar bash extension) that is incompatible with `/bin/sh` (dash), which is th"}
+{"file": "IDCevo_Kernel_Checkpatch__2091.log", "label": "devops", "confidence": "likely", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "idcevo-jira-fetch__495.log", "label": "devops", "confidence": "likely", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "IDCevo_OND_Build_A17_Beta3_migration_2__21.log", "label": "devops", "confidence": "likely", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "gen3plus_pid_cg_my26_aug26_release_tagging__147.log", "label": "devops", "confidence": "likely", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "fixture__infra_agent_offline.log", "label": "infra", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "fixture__devops_missing_credentials.log", "label": "devops", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "fixture__compilation_java_symbol.log", "label": "compilation", "confidence": "clear", "config": "qwen-low", "error": "LLMRateLimitError"}
+{"file": "fixture__test_failure.log", "label": "needs_triage", "confidence": "high", "config": "qwen-low", "llm_category": "needs_triage", "validated": true, "final_category": "needs_triage", "reason_codes": [], "rule_categories": ["needs_triage"], "attempts": 1, "calls": 3, "prompt_tokens": 2979, "completion_tokens": 2604, "seconds": 115.6, "root_cause": "Two assertion failures in com.acme.FooTest indicate the parse method returns incorrect values: testParse expected 3 but received 2, and testParseEmpty expected true but received false. This suggests e"}

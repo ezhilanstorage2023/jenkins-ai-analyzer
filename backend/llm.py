@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from functools import lru_cache
 from typing import TypeVar
 
@@ -32,6 +33,14 @@ class LLMProviderError(LLMError):
 
 class LLMUnavailableError(LLMProviderError):
     """No LLM is configured."""
+
+
+class LLMRateLimitError(LLMProviderError):
+    """The provider kept answering 429 after the allowed waits."""
+
+
+# Indirection so tests can run without really sleeping.
+_sleep = time.sleep
 
 
 @lru_cache
@@ -87,19 +96,63 @@ def _is_json_generation_failure(err: groq.APIError) -> bool:
     return isinstance(body, dict) and body.get("code") == "json_validate_failed"
 
 
-def complete_json(prompt: str, schema: type[T]) -> T:
+def _retry_after_seconds(err: groq.RateLimitError, cap: float) -> float:
+    try:
+        wait = float(err.response.headers.get("retry-after", ""))
+    except (AttributeError, TypeError, ValueError):
+        wait = 5.0
+
+    return max(0.0, min(wait, cap))
+
+
+def complete_json(
+    prompt: str,
+    schema: type[T],
+    *,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
+) -> T:
     settings = get_settings()
     client = get_llm_client()
     attempts = 1 + settings.llm_parse_retries
     last_error_type = "unknown"
+    rate_limit_waits = 0
 
-    for attempt in range(1, attempts + 1):
+    request = {
+        "model": model or settings.llm_model,
+        "messages": [{"role": "user", "content": prompt}],
+        "response_format": {"type": "json_object"},
+    }
+    effort = reasoning_effort or settings.llm_reasoning_effort
+
+    if effort:
+        request["reasoning_effort"] = effort
+
+    attempt = 0
+
+    while attempt < attempts:
+        attempt += 1
+
         try:
-            response = client.chat.completions.create(
-                model=settings.llm_model,
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
+            response = client.chat.completions.create(**request)
+        except groq.RateLimitError as err:
+            # Waiting is not a parse attempt: give the slot back.
+            if rate_limit_waits >= settings.llm_rate_limit_retries:
+                raise LLMRateLimitError(
+                    "LLM provider rate limit exceeded"
+                ) from err
+
+            rate_limit_waits += 1
+            attempt -= 1
+            wait = _retry_after_seconds(
+                err, settings.llm_rate_limit_max_wait_seconds
             )
+            logger.warning(
+                "LLM rate limited; waiting",
+                extra={"wait_seconds": wait, "retry": rate_limit_waits},
+            )
+            _sleep(wait)
+            continue
         except groq.APIError as err:
             if not _is_json_generation_failure(err):
                 raise LLMProviderError(

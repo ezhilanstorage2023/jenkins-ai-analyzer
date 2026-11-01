@@ -8,83 +8,163 @@
 </head>
 <body>
 
-<header>
-    <h1>Jenkins Failure Review</h1>
-    <p class="subtitle">
-        Shadow mode: classifications and proposed actions are recorded only.
-        Nothing is executed against Jenkins, Gerrit or email.
-    </p>
-    <div id="accuracy" class="accuracy"></div>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+    <div>
+        <h1>Jenkins Failure Review</h1>
+        <p class="subtitle" id="modeBanner">
+            Shadow mode: classifications and proposed actions are recorded only.
+            Nothing is executed against Jenkins, Gerrit or email.
+        </p>
+    </div>
+    <div class="side">
+        <div class="who" id="who" aria-live="polite"></div>
+        <div class="controls" id="controls" aria-live="polite"></div>
+    </div>
 </header>
 
-<main>
-    <section class="list">
+<section class="accuracy-bar" aria-label="Reviewer accuracy">
+    <span class="label">Reviewed accuracy</span>
+    <div id="accuracy" class="accuracy"></div>
+    <div id="emailStats" class="accuracy"></div>
+</section>
+
+<main id="main">
+    <div class="tabs" role="tablist" aria-label="Views">
+        <button class="tab" id="tab-jobs" role="tab" aria-selected="true"
+                aria-controls="panel-jobs" type="button">Live failing jobs</button>
+        <button class="tab" id="tab-events" role="tab" aria-selected="false"
+                aria-controls="panel-events" type="button">Classified events</button>
+    </div>
+
+    <section id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs" class="card">
         <div class="toolbar">
-            <label for="buildsCount">Live failed builds · last</label>
-            <input id="buildsCount" type="number" min="1" max="100" value="20">
-            <button id="loadBuilds" type="button">Refresh from Jenkins</button>
+            <input id="jobQuery" type="search" placeholder="Search job name"
+                   aria-label="Search job name">
+
+            <label>Failed within
+                <select id="jobAge">
+                    <option value="7">7 days</option>
+                    <option value="30" selected>30 days</option>
+                    <option value="90">90 days</option>
+                    <option value="365">1 year</option>
+                    <option value="0">any time</option>
+                </select>
+            </label>
+
+            <label>Sort
+                <select id="jobSort">
+                    <option value="timestamp" selected>Newest failure</option>
+                    <option value="job">Job name</option>
+                </select>
+            </label>
+
+            <label>Rows
+                <select id="jobPageSize">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                </select>
+            </label>
+
+            <label class="check"><input id="jobDisabled" type="checkbox"> include disabled jobs</label>
+
+            <button id="jobRefresh" class="primary" type="button">Refresh from Jenkins</button>
         </div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Job</th>
-                    <th>Build</th>
-                    <th>Result</th>
-                    <th>Failed (UTC)</th>
-                    <th>State</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="failedBuilds"></tbody>
-        </table>
-        <p id="buildsStatus" class="muted"></p>
+        <div id="bulkBar" class="bulkbar" hidden>
+            <span id="bulkCount"></span>
+            <button id="classifySelected" class="primary" type="button">Classify selected</button>
+            <button id="clearSelection" type="button">Clear</button>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="narrow"><input id="selectAll" type="checkbox" aria-label="Select all on this page"></th>
+                        <th>Job</th>
+                        <th>Build</th>
+                        <th>Failed</th>
+                        <th>State</th>
+                        <th class="narrow">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="failedBuilds"></tbody>
+            </table>
+        </div>
+
+        <div class="pager">
+            <button id="prevPage" type="button">Previous</button>
+            <span id="pageInfo" class="muted"></span>
+            <button id="nextPage" type="button">Next</button>
+        </div>
+        <p id="buildsStatus" class="muted" role="status"></p>
     </section>
 
-    <section class="list">
+    <section id="panel-events" role="tabpanel" aria-labelledby="tab-events" class="card" hidden>
         <div class="toolbar">
-            <label for="filter">Show</label>
-            <select id="filter">
-                <option value="triage">Needs triage (unlabeled)</option>
-                <option value="all">All</option>
-                <option value="infra">infra</option>
-                <option value="devops">devops</option>
-                <option value="compilation">compilation</option>
-                <option value="needs_triage">needs_triage</option>
-            </select>
+            <label>Show
+                <select id="filter">
+                    <option value="triage">Needs triage (unlabeled)</option>
+                    <option value="all">All</option>
+                    <option value="infra">infra</option>
+                    <option value="devops">devops</option>
+                    <option value="compilation">compilation</option>
+                    <option value="needs_triage">needs_triage</option>
+                </select>
+            </label>
             <button id="refresh" type="button">Refresh</button>
         </div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Job</th>
-                    <th>Build</th>
-                    <th>Received (UTC)</th>
-                    <th>Final</th>
-                    <th>LLM</th>
-                    <th>Validated</th>
-                    <th>Reasons</th>
-                    <th>Label</th>
-                </tr>
-            </thead>
-            <tbody id="events"></tbody>
-        </table>
-        <p id="listStatus" class="muted"></p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Job</th>
+                        <th>Build</th>
+                        <th>Received (UTC)</th>
+                        <th>Final</th>
+                        <th>LLM</th>
+                        <th>Validated</th>
+                        <th>Reasons</th>
+                        <th>Label</th>
+                        <th>Rebuild</th>
+                    </tr>
+                </thead>
+                <tbody id="events"></tbody>
+            </table>
+        </div>
+        <p id="listStatus" class="muted" role="status"></p>
+    </section>
+</main>
+
+<aside id="detail" class="drawer" hidden aria-labelledby="detailTitle">
+    <div class="drawer-head">
+        <div>
+            <h2 id="detailTitle"></h2>
+            <a id="detailLink" target="_blank" rel="noopener noreferrer">Open in Jenkins</a>
+        </div>
+        <button id="closeDetail" type="button" aria-label="Close details">Close</button>
+    </div>
+
+    <div id="detailBody"></div>
+
+    <h3 id="actionHeading">Proposed (shadow — not executed)</h3>
+    <div id="detailAction"></div>
+
+    <section id="emailSection" hidden>
+        <h3 id="emailHeading">Email preview (shadow — not sent)</h3>
+        <div id="emailPreview"></div>
     </section>
 
-    <section id="detail" class="detail hidden">
-        <h2 id="detailTitle"></h2>
-        <div id="detailBody"></div>
-
-        <h3>Proposed (shadow — not executed)</h3>
-        <div id="detailAction"></div>
-
+    <section id="labelSection">
         <h3>Label this classification</h3>
         <form id="labelForm">
-            <label><input type="radio" name="verdict" value="correct" checked> Correct</label>
-            <label><input type="radio" name="verdict" value="incorrect"> Incorrect</label>
-            <select id="correctCategory" disabled>
+            <label class="check"><input type="radio" name="verdict" value="correct" checked> Correct</label>
+            <label class="check"><input type="radio" name="verdict" value="incorrect"> Incorrect</label>
+            <select id="correctCategory" disabled aria-label="Correct category">
                 <option value="">Correct category…</option>
                 <option value="infra">infra</option>
                 <option value="devops">devops</option>
@@ -92,11 +172,13 @@
                 <option value="needs_triage">needs_triage</option>
             </select>
             <textarea id="note" maxlength="2000" placeholder="Note (optional)"></textarea>
-            <button type="submit">Save label</button>
-            <span id="labelStatus" class="muted"></span>
+            <button class="primary" type="submit">Save label</button>
         </form>
+        <p id="labelStatus" class="muted" role="status"></p>
     </section>
-</main>
+</aside>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="review.js"></script>
 </body>
